@@ -87,4 +87,35 @@ All commands below were freshly run from the Task 3 worktree.
 
 ## Commit
 
+## Fix round 1: Artifact provenance, content authentication, and prompt hardening
+
+### Findings closed
+
+1. Every report/source now has an exact per-artifact schema: `url`, Keccak-256 `content_hash`, `content_version`, artifact `schema_version`, `issuer`, locked `subject`, and `observation_start`, `observation_end`, and `published_at`. The primary issuer must be the beneficiary; sources must declare a different issuer and canonical host. Every artifact subject/date is checked against the immutable grant/milestone.
+2. The declared hash authenticates the exact fetched UTF-8 string after the contract's 8,192-character fetch bound. The contract computes `0x` plus `Keccak256(body.encode("utf-8")).hexdigest()` for every fetched artifact before consensus. Any unavailable or mismatched artifact prevents a favorable provisional verdict and clamps it to `UNRESOLVED`.
+3. Evidence URLs require HTTPS and a dotted canonical ASCII hostname. Userinfo, all ports (including 443), localhost, single-label names, malformed labels, numeric single-token address forms, IPv6 literals, and IPv4 loopback/private/link-local ranges are rejected before fetch. Canonical lower-case hosts are used for independent-source comparison.
+4. `REQUEST_MORE_INFO` is accepted only with at least one bounded, non-empty curable `missing_fields` item and no contradictions; otherwise it clamps to `UNRESOLVED`.
+5. The prompt now places the canonical pack and each fetched string in separate UTF-8 hexadecimal payloads. Raw fetched bytes therefore cannot close the XML-like structural delimiters. A direct test captures the actual prompt and proves injected delimiter text is absent while its hex representation is present.
+6. `prompt_comparative` is wrapped in the same safe-abstention boundary as `exec_prompt`. The installed GenLayer linter stubs declare `prompt_comparative(fn, principle)` as a normal return value with no no-throw guarantee. In the direct runtime, a substituted wrapper exception is catchable; the direct boundary test proves it produces and stores an `UNRESOLVED` record without accounting movement. `genvm-lint validate` accepts this form.
+
+### Strict TDD and mutation evidence
+
+- Per-artifact schema RED: after replacing the fixture with artifact-local metadata, the pre-fix happy path failed with `ValueError: unexpected evidence field`; the minimal per-artifact validator then made it pass.
+- URL canonicalization RED: numeric `https://2130706433/report` and single-label `https://intranet/report` produced `2 failed, 8 passed`; both had been accepted before the canonical-host fix. The corrected check passed all ten unsafe URL cases.
+- Wrapper mutation: removing the wrapper `try/except` made the direct boundary test fail with `RuntimeError: comparative wrapper unavailable`. The catch was restored.
+- Hash mutation: making `_fetched_body_matches` return `True` made report and source substitution cases fail because they incorrectly became `PROVISIONAL_APPROVAL`; exact comparison was restored.
+- REQUEST_MORE_INFO mutation: removing the curability/contradiction check made both unsafe request cases fail because they remained `REQUEST_MORE_INFO`; the clamp was restored.
+
+### Fix-round verification
+
+- Focused WSL direct evidence suite: exit 0; `64 passed in 4.92s`.
+- Full WSL direct suite: exit 0; `88 passed in 6.55s`.
+- `PYTHONIOENCODING=utf-8 genvm-lint lint/schema/validate contracts/AidTrail.py`: all exit 0. AST lint retains existing bare-`ValueError` warnings, none promoted to errors; schema remains 11 methods; semantic validation reports 7 view and 4 write methods.
+- `npm run lint`, `npm run typecheck`, `npm run test:run`, and `npm run build`: all exit 0. Vitest has no frontend test files and exits through the existing `--passWithNoTests` configuration.
+- `git diff --check`: exit 0.
+
+### Remaining limitation
+
+The contract does not DNS-resolve a public hostname before `web.render`: doing so would introduce another nondeterministic operation and violate the Task 3 budget of at most three fetches plus one prompt operation. It deterministically rejects all unsafe literal and authority forms listed above; GenLayer's HTTPS fetch runtime resolves accepted public hostnames. This is not represented as a DNS-rebinding proof.
+
 `feat: evaluate bound milestone evidence` — the final immutable commit hash is reported in the task handoff. It is intentionally not embedded here because this report is part of that commit.

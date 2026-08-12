@@ -5,6 +5,7 @@ import sys
 from typing import Any, NamedTuple, cast
 
 import pytest
+from Crypto.Hash import keccak
 from gltest.direct import create_address
 
 
@@ -103,6 +104,21 @@ class SenderVM:
     def mock_llm(self, response: str) -> None:
         self._direct_vm.mock_llm("AidTrail evidence evaluation", response)
 
+    @contextmanager
+    def capture_llm_prompts(self) -> Iterator[list[str]]:
+        prompts: list[str] = []
+        original_match = self._direct_vm._match_llm_mock
+
+        def capture(prompt: str) -> Any:
+            prompts.append(prompt)
+            return original_match(prompt)
+
+        self._direct_vm._match_llm_mock = capture
+        try:
+            yield prompts
+        finally:
+            self._direct_vm._match_llm_mock = original_match
+
     def clear_mocks(self) -> None:
         self._direct_vm.clear_mocks()
 
@@ -177,6 +193,13 @@ def valid_pack(
 ) -> dict[str, Any]:
     milestone = contract.get_milestone(active_grant, 0).call()
     domain = contract.get_evidence_domain().call()
+    subject = {
+        "project_name": valid_plan.project_name,
+        "project_reference": valid_plan.project_reference,
+        "region": valid_plan.region,
+        "milestone_title": valid_plan.milestone_titles[0],
+        "criteria_hash": milestone["criteria_hash"],
+    }
     return {
         "schema_version": 1,
         "action": "SUBMIT_EVIDENCE",
@@ -185,27 +208,24 @@ def valid_pack(
         "grant_id": active_grant,
         "milestone_index": 0,
         "submission_nonce": 1,
-        "issuer": beneficiary.as_hex,
-        "subject": {
-            "project_name": valid_plan.project_name,
-            "project_reference": valid_plan.project_reference,
-            "region": valid_plan.region,
-            "milestone_title": valid_plan.milestone_titles[0],
-            "criteria_hash": milestone["criteria_hash"],
-        },
-        "dates": {
-            "period_start": 1_782_864_000,
-            "period_end": 1_785_542_400,
-            "issued_at": 1_785_628_800,
-        },
         "report": {
             "url": "https://beneficiary.example/reports/atg-1-survey",
-            "content_hash": "0x" + "11" * 32,
+            "content_hash": evidence_body_hash(REPORT_BODY),
+            "content_version": "report-v1",
+            "schema_version": 1,
+            "issuer": beneficiary.as_hex,
+            "subject": subject,
+            "dates": evidence_dates(),
         },
         "independent_sources": [
             {
                 "url": "https://observer.example/atg-1-survey",
-                "content_hash": "0x" + "22" * 32,
+                "content_hash": evidence_body_hash(SOURCE_A_BODY),
+                "content_version": "observer-v1",
+                "schema_version": 1,
+                "issuer": "observer:chiang-rai-civic-monitor",
+                "subject": subject,
+                "dates": evidence_dates(),
             }
         ],
     }
@@ -223,6 +243,29 @@ def approval_result() -> str:
 
 def copy_pack(pack: dict[str, Any]) -> dict[str, Any]:
     return cast(dict[str, Any], deepcopy(pack))
+
+
+REPORT_BODY = "Beneficiary report for the locked milestone."
+SOURCE_A_BODY = "Independent source confirms the project, place, and dates."
+SOURCE_B_BODY = "Second independent source confirms completion."
+
+
+def evidence_body_hash(body: str) -> str:
+    digest = keccak.new(digest_bits=256)
+    digest.update(body.encode("utf-8"))
+    return "0x" + digest.hexdigest()
+
+
+def evidence_dates() -> dict[str, int]:
+    return {
+        "observation_start": 1_782_864_000,
+        "observation_end": 1_785_542_400,
+        "published_at": 1_785_628_800,
+    }
+
+
+def bind_artifact_body(artifact: dict[str, Any], body: str) -> None:
+    artifact["content_hash"] = evidence_body_hash(body)
 
 
 def call_create(contract: ContractCalls, vm: SenderVM, sponsor: Any, plan: GrantPlan) -> None:
