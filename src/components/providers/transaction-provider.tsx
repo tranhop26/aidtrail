@@ -3,6 +3,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useReducer } from "react";
 
 import type { SubmittedWrite, TransactionHash } from "../../lib/domain";
+import { createReadClient } from "../../lib/genlayer/read-client";
 import { initialTransactionState, reduceTransactionState, type ConsensusStatus, type ExecutionStatus, type TransactionState } from "../../lib/transaction-state";
 
 export interface ReceiptReader { (hash: TransactionHash): Promise<{ status: ConsensusStatus; execution: ExecutionStatus } | undefined>; }
@@ -10,20 +11,23 @@ interface TransactionContextValue { state: TransactionState; execute(write: () =
 const TransactionContext = createContext<TransactionContextValue | null>(null);
 const savedHashKey = "aidtrail.transaction.hash";
 
-function receiptReaderFromWallet(): ReceiptReader {
+export function normalizeGenLayerReceipt(raw: unknown): Awaited<ReturnType<ReceiptReader>> {
+  if (!raw || typeof raw !== "object") return undefined;
+  const receipt = raw as Record<string, unknown>;
+  const status = receipt.statusName ?? receipt.status;
+  const execution = receipt.txExecutionResultName ?? receipt.execution ?? receipt.execution_status;
+  return typeof status === "string" && typeof execution === "string" ? { status: status as ConsensusStatus, execution: execution as ExecutionStatus } : undefined;
+}
+
+function receiptReaderFromNetwork(): ReceiptReader {
+  const client = createReadClient();
   return async (hash) => {
-    const provider = (window as Window & { ethereum?: { request(args: { method: string; params?: unknown[] }): Promise<unknown> } }).ethereum;
-    if (!provider) throw new Error("Injected wallet is unavailable for receipt polling.");
-    const raw = await provider.request({ method: "genlayer_getTransactionReceipt", params: [hash] });
-    if (!raw || typeof raw !== "object") return undefined;
-    const receipt = raw as Record<string, unknown>;
-    const status = receipt.status ?? receipt.consensus_status;
-    const execution = receipt.execution ?? receipt.execution_status;
-    return typeof status === "string" && typeof execution === "string" ? { status: status as ConsensusStatus, execution: execution as ExecutionStatus } : undefined;
+    try { return normalizeGenLayerReceipt(await client.getTransaction({ hash })); }
+    catch { return undefined; }
   };
 }
 
-export function TransactionProvider({ children, readReceipt = receiptReaderFromWallet(), pollMs = 1_000, readbackAttempts = 5 }: { children: ReactNode; readReceipt?: ReceiptReader; pollMs?: number; readbackAttempts?: number }) {
+export function TransactionProvider({ children, readReceipt = receiptReaderFromNetwork(), pollMs = 1_000, readbackAttempts = 5 }: { children: ReactNode; readReceipt?: ReceiptReader; pollMs?: number; readbackAttempts?: number }) {
   const [state, dispatch] = useReducer(reduceTransactionState, initialTransactionState);
   useEffect(() => { const hash = window.sessionStorage.getItem(savedHashKey) as TransactionHash | null; if (hash) dispatch({ type: "submitted", hash }); }, []);
   const execute = useCallback(async (write: () => Promise<SubmittedWrite>) => {
@@ -51,4 +55,4 @@ export function TransactionProvider({ children, readReceipt = receiptReaderFromW
 
 export function useTransaction(): TransactionContextValue { const value = useContext(TransactionContext); if (!value) throw new Error("useTransaction must be used within TransactionProvider"); return value; }
 
-export function TransactionStatus({ state }: { state: TransactionState }) { return <p className="transaction-status" role="status">{state.phase === "success" ? "Confirmed by finalized execution and contract readback." : state.phase === "readback_mismatch" ? "Execution finalized, but the contract state did not reconcile. Refresh and try again." : state.phase === "execution_error" ? "Consensus finalized with an execution error; no success was recorded." : state.error ?? `Transaction status: ${state.phase.replaceAll("_", " ")}.`}</p>; }
+export function TransactionStatus({ state }: { state: TransactionState }) { return <p className="transaction-status" role="status">{state.phase === "success" ? "Confirmed by finalized execution and contract readback." : state.phase === "readback_mismatch" ? "Execution finalized, but the contract state did not reconcile. Refresh and try again." : state.phase === "execution_error" ? "Consensus finalized with an execution error; no success was recorded." : state.error ?? `Transaction status: ${state.phase.replaceAll("_", " ")}.`}{state.hash ? ` Hash: ${state.hash}` : ""}</p>; }
