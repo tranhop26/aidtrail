@@ -79,6 +79,15 @@ class ChallengeRecord:
     status: str
 
 
+@gl.evm.contract_interface
+class _Recipient:
+    class View:
+        pass
+
+    class Write:
+        pass
+
+
 class AidTrail(gl.Contract):
     next_grant_number: u256
     grants: TreeMap[str, Grant]
@@ -260,7 +269,7 @@ class AidTrail(gl.Contract):
         self.credits[owner] = u256(0)
         self.available_credits -= credit
         self.completed_refunds += credit
-        gl.get_contract_at(owner).emit_transfer(value=credit)
+        _Recipient(owner).emit_transfer(value=credit)
 
     @gl.public.view
     def get_grant(self, grant_id: str) -> dict:

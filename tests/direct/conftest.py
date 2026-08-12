@@ -71,6 +71,25 @@ class SenderVM:
         finally:
             self._direct_vm.value = previous_value
 
+    @contextmanager
+    def capture_external_messages(self) -> Iterator[list[dict[str, Any]]]:
+        messages: list[dict[str, Any]] = []
+        previous_hook = self._direct_vm._gl_call_hook
+
+        def capture(_vm: Any, request: dict[str, Any]) -> Any:
+            messages.append(request)
+            if previous_hook is not None:
+                result = previous_hook(_vm, request)
+                if result is not None:
+                    return result
+            return {"ok": None}
+
+        self._direct_vm._gl_call_hook = capture
+        try:
+            yield messages
+        finally:
+            self._direct_vm._gl_call_hook = previous_hook
+
     def expect_revert(self, message: str) -> Any:
         return self._direct_vm.expect_revert(message)
 

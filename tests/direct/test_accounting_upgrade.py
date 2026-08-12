@@ -79,6 +79,40 @@ def test_excess_funding_creates_sponsor_credit_and_withdrawal_consumes_it(
         contract.withdraw_credit().call()
 
 
+def test_credit_withdrawal_routes_excess_to_sponsor_eoa_as_external_gen_message(
+    contract, vm, sponsor, valid_plan
+):
+    # Break caught: routing a sponsor EOA refund through an internal IC message.
+    with vm.sender(sponsor):
+        grant_id = contract.create_grant(*valid_plan).call()
+    with vm.sender(sponsor), vm.value(650):
+        contract.fund_grant(grant_id).call()
+
+    with vm.capture_external_messages() as messages, vm.sender(sponsor):
+        contract.withdraw_credit().call()
+
+    assert messages == [{"EthSend": {"address": sponsor, "calldata": b"", "value": 50}}]
+
+
+def test_partial_then_excess_funding_reserves_target_and_credits_only_excess(
+    contract, vm, sponsor, valid_plan
+):
+    # Break caught: treating a later payment as a fresh target instead of accumulated funding.
+    with vm.sender(sponsor):
+        grant_id = contract.create_grant(*valid_plan).call()
+    with vm.sender(sponsor), vm.value(200):
+        contract.fund_grant(grant_id).call()
+    with vm.sender(sponsor), vm.value(450):
+        contract.fund_grant(grant_id).call()
+
+    grant = contract.get_grant(grant_id).call()
+    summary = contract.get_summary().call()
+    assert (grant["status"], grant["funded"], grant["reserved"]) == ("ACTIVE", 600, 600)
+    assert contract.get_credit(sponsor).call() == 50
+    assert (summary["grant_inflows"], summary["available_credits"]) == (650, 50)
+    assert_conserved(summary)
+
+
 @pytest.mark.parametrize(
     ("actor", "amount", "message"),
     [
