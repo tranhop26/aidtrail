@@ -29,6 +29,13 @@ describe("workflow readbacks", () => {
 
     await expect(grantCreationReadback(after, new Set([grant.grantId]), grantTerms(grant))()).resolves.toBe(false);
   });
+  it("finds the matching grant when a concurrent unseen grant appears first", async () => {
+    const concurrent = { ...grant, grantId: "ATG-3", projectName: "Concurrent grant" };
+    const created = { ...grant, grantId: "ATG-4" };
+    const after = { listGrants: async () => ({ availability: "available" as const, data: [grant, concurrent, created] }) };
+
+    await expect(grantCreationReadback(after, new Set([grant.grantId]), grantTerms(created))()).resolves.toBe(true);
+  });
   it("proves funding changed funded amount or activated the grant", async () => expect(await fundReadback(contract, "ATG-2", 20n, "FUNDING")()).toBe(true));
   it("proves evidence advanced nonce and committed a hash", async () => expect(await evidenceReadback(contract, "ATG-2", 0n, 1n)()).toBe(true));
   it("proves a challenge left the original provisional decision", async () => expect(await challengeReadback(contract, "ATG-2", 0n, 0n, "PROVISIONAL_REJECTION")()).toBe(true));
