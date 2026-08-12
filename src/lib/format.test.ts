@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mapGrant, mapMilestone } from "./format";
+import { mapGrant, mapMilestone, mapSummary } from "./format";
 
 describe("contract result mappers", () => {
   it("preserves large contract amounts as bigint", () => {
@@ -18,5 +18,31 @@ describe("contract result mappers", () => {
     expect(() => mapMilestone({
       grant_id: "ATG-1", index: "0", title: "Ship", criteria: "done", allocation: "10", deadline: "100", evidence_requirement: "report", min_independent_sources: "1", criteria_hash: "0xcriteria", status: "UNKNOWN", submission_nonce: "0", evidence_pack_hash: "", reserved_amount: "10", evidence_count: "0", challenge_deadline: "0", challenge_nonce: "0", challenged_decision_nonce: "0", execution_complete: false, expired: false,
     })).toThrow("unknown milestone status");
+  });
+
+  it("maps safe integer u256 values returned by the live SDK to bigint", () => {
+    expect(mapSummary({
+      grant_inflows: 0,
+      challenge_credit_inflows: 1,
+      available: 2,
+      reserved_milestone_escrow: 3,
+      completed_payouts: 4,
+      completed_refunds: 5,
+      available_credits: 6,
+      reserved_bonds: 7,
+      returned_bonds: 8,
+      slashed_bonds: 9,
+    })).toEqual({
+      grantInflows: 0n,
+      challengeCreditInflows: 1n,
+      available: 2n,
+      reservedMilestoneEscrow: 3n,
+      completedPayouts: 4n,
+      completedRefunds: 5n,
+      availableCredits: 6n,
+      reservedBonds: 7n,
+      returnedBonds: 8n,
+      slashedBonds: 9n,
+    });
   });
 });

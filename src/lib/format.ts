@@ -18,8 +18,9 @@ function text(raw: RawRecord, key: string): string {
 function amount(raw: RawRecord, key: string): bigint {
   const value = raw[key];
   if (typeof value === "bigint" && value >= 0n) return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
-  throw new Error(`contract field ${key} must be a non-negative bigint string`);
+  throw new Error(`contract field ${key} must be a non-negative integer`);
 }
 function flag(raw: RawRecord, key: string): boolean {
   const value = raw[key];

@@ -19,7 +19,7 @@ function injectedProvider(): InjectedProvider | undefined {
 function isExpectedNetwork(chainId: string, expectedChainId?: string) { return !expectedChainId || chainId.toLowerCase() === expectedChainId.toLowerCase(); }
 
 export function WalletProvider({ children, expectedChainId = process.env.NEXT_PUBLIC_GENLAYER_CHAIN_ID }: { children: ReactNode; expectedChainId?: string }) {
-  const [state, setState] = useState<WalletState>(() => injectedProvider() ? { status: "disconnected" } : unavailable);
+  const [state, setState] = useState<WalletState>({ status: "disconnected" });
   const update = useCallback((account: unknown, chainId: unknown, provider = injectedProvider()) => {
     const selected = Array.isArray(account) ? account[0] : account;
     if (typeof selected !== "string" || !selected.startsWith("0x")) return setState({ status: "disconnected", provider });
@@ -29,7 +29,7 @@ export function WalletProvider({ children, expectedChainId = process.env.NEXT_PU
 
   useEffect(() => {
     const provider = injectedProvider();
-    if (!provider) return;
+    if (!provider) { queueMicrotask(() => setState(unavailable)); return; }
     void Promise.all([provider.request({ method: "eth_accounts" }), provider.request({ method: "eth_chainId" })]).then(([accounts, chainId]) => update(accounts, chainId, provider)).catch(() => setState({ status: "disconnected", provider }));
     const evented = provider as InjectedProvider & { on?: (event: string, callback: (value: unknown) => void) => void; removeListener?: (event: string, callback: (value: unknown) => void) => void };
     const accountsChanged = (accounts: unknown) => { void provider.request({ method: "eth_chainId" }).then((chainId) => update(accounts, chainId, provider)); };
