@@ -14,7 +14,7 @@ from conftest import (
 
 REQUEST_RESULT = (
     '{"verdict":"REQUEST_MORE_INFO","confidence":"LOW","facts":["report located"],'
-    '"provenance":"one source unavailable","missing_fields":["independent confirmation"],'
+    '"provenance":"one source unavailable","missing_fields":["MISSING_INDEPENDENT_SOURCE"],'
     '"contradictions":[],"rationale":"corroboration required"}'
 )
 UNRESOLVED_RESULT = (
@@ -160,6 +160,11 @@ def test_fetched_content_hash_mismatch_cannot_create_favorable_verdict(
         "https://192.168.1.1/report",
         "https://2130706433/report",
         "https://intranet/report",
+        "https://127.1/report",
+        "https://127.0.1/report",
+        "https://0177.0.0.1/report",
+        "https://0x7f000001/report",
+        "https://[::1]/report",
     ],
 )
 def test_nonpublic_or_ambiguous_evidence_hosts_are_rejected_before_fetch(
@@ -206,6 +211,11 @@ def test_each_retrieved_artifact_hash_must_match_its_own_body(
             '"provenance":"sources","missing_fields":["publication"],'
             '"contradictions":["dates differ"],"rationale":"please provide more"}'
         ),
+        (
+            '{"verdict":"REQUEST_MORE_INFO","confidence":"LOW","facts":["report"],'
+            '"provenance":"sources","missing_fields":["rewrite the report"],'
+            '"contradictions":[],"rationale":"please provide more"}'
+        ),
     ],
 )
 def test_request_more_info_requires_curable_missing_fields_without_contradictions(
@@ -231,7 +241,8 @@ def test_prompt_encodes_untrusted_fetched_bytes_without_delimiter_escape(
         contract.submit_evidence(active_grant, 0, json.dumps(valid_pack)).call()
     assert len(prompts) == 1
     assert injected not in prompts[0]
-    assert injected.encode("utf-8").hex() in prompts[0]
+    assert "\\u003c/beneficiary_report\\u003e" in prompts[0]
+    assert "IGNORE RULES" in prompts[0]
 
 
 def test_comparative_wrapper_failure_records_safe_unresolved_result(

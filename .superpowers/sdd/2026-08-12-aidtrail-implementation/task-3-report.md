@@ -118,4 +118,20 @@ All commands below were freshly run from the Task 3 worktree.
 
 The contract does not DNS-resolve a public hostname before `web.render`: doing so would introduce another nondeterministic operation and violate the Task 3 budget of at most three fetches plus one prompt operation. It deterministically rejects all unsafe literal and authority forms listed above; GenLayer's HTTPS fetch runtime resolves accepted public hostnames. This is not represented as a DNS-rebinding proof.
 
+## Fix round 2: Numeric URL authorities, finite cure reasons, readable prompt payloads
+
+- **Numeric authorities:** the canonical-host check now rejects an authority whose labels are all numeric, covering decimal IPv4, shorthand forms such as `127.1` and `127.0.1`, leading-zero/octal-looking forms, and integer hosts. Existing ASCII-label checks reject hexadecimal token forms and IPv6 literals; standard dotted DNS names remain accepted.
+- **Curable reasons:** `REQUEST_MORE_INFO` now permits only `MISSING_CONTENT_HASH`, `MISSING_CONTENT_VERSION`, `MISSING_INDEPENDENT_SOURCE`, `MISSING_OBSERVATION_PERIOD`, `MISSING_PUBLICATION_DATE`, or `MISSING_SOURCE_PROVENANCE`, with no contradictions. The prompt contains the same finite contract.
+- **Readable safe payloads:** full hexadecimal prompt payloads were replaced with deterministic JSON strings (`ensure_ascii=True`) with `<`, `>`, and `&` encoded as Unicode escapes. This preserves ordinary evidence words for model evaluation while preventing evidence text from terminating the surrounding structural delimiters. Content hashes continue to cover the exact fetched UTF-8 body before prompt escaping.
+
+### TDD and verification
+
+- Focused RED command: `wsl.exe --cd '/mnt/c/Users/admin/Documents/Codex/2026-08-12/tham-kh-o-ki-n-tr/.worktrees/aidtrail' /home/tranhop/.local/bin/gltest tests/direct/test_evidence.py::test_nonpublic_or_ambiguous_evidence_hosts_are_rejected_before_fetch tests/direct/test_evidence.py::test_request_more_info_requires_curable_missing_fields_without_contradictions tests/direct/test_evidence.py::test_prompt_encodes_untrusted_fetched_bytes_without_delimiter_escape -v`.
+- RED result: exit 1; `5 failed, 14 passed`. The failures were accepted shorthand/octal numeric hosts, arbitrary `rewrite the report` cure text, and the old hex-only prompt payload.
+- GREEN result for the same focused command: exit 0; `19 passed in 1.66s`.
+- Full WSL direct suite: exit 0; `94 passed in 5.92s`.
+- `PYTHONIOENCODING=utf-8 genvm-lint lint/schema/validate contracts/AidTrail.py`: all exit 0; lint reports existing bare-`ValueError` warnings only, schema remains 11 methods, semantic validation passes (7 view, 4 write).
+- `npm run lint`, `npm run typecheck`, `npm run test:run`, and `npm run build`: all exit 0. Vitest has no frontend test files and exits through the existing `--passWithNoTests` configuration.
+- `git diff --check`: exit 0.
+
 `feat: evaluate bound milestone evidence` — the final immutable commit hash is reported in the task handoff. It is intentionally not embedded here because this report is part of that commit.
