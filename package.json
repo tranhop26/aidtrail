@@ -12,7 +12,8 @@
     "test:run": "vitest run --passWithNoTests",
     "contract:test": "gltest tests/direct -v",
     "contract:integration": "gltest tests/integration -v",
-    "verify:live": "npm run contract:integration"
+    "verify:live": "node scripts/verify-live.mjs",
+    "deploy:dry-run": "npx tsx scripts/deploy.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.3.3",

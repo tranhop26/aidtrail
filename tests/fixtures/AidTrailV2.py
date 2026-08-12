@@ -1599,3 +1599,4 @@ class AidTrail(gl.Contract):
             + "|"
             + evidence_pack_hash
         )
+

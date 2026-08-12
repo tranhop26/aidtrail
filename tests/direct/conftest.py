@@ -141,6 +141,12 @@ def sponsor() -> Any:
 
 
 @pytest.fixture
+def upgrader(direct_vm: Any) -> Any:
+    """The deployment sender is the root upgrader initialized by the contract."""
+    return direct_vm.sender
+
+
+@pytest.fixture
 def beneficiary() -> Any:
     return create_address("beneficiary")
 

@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from conftest import call_create
 
@@ -175,3 +176,31 @@ def test_expired_allocation_becomes_exact_sponsor_eoa_credit_once(
     assert messages == [{"EthSend": {"address": sponsor, "calldata": b"", "value": 100}}]
     assert contract.get_credit(sponsor).call() == 0
     assert_conserved(contract.get_summary().call())
+
+
+def test_upgrade_rejects_a_sender_outside_the_root_upgrader_list(contract, vm, stranger):
+    # Break caught: any caller can replace locked contract code.
+    v2_code = (Path(__file__).parents[1] / "fixtures" / "AidTrailV2.py").read_bytes()
+    with vm.sender(stranger):
+        with pytest.raises(Exception):
+            contract.upgrade(v2_code).call()
+
+
+def test_upgrade_keeps_grants_and_accounting_readable_from_v2(
+    contract, vm, sponsor, upgrader, valid_plan
+):
+    # Break caught: a compatible code upgrade reinitializes or changes existing grant/accounting state.
+    with vm.sender(sponsor):
+        grant_id = contract.create_grant(*valid_plan).call()
+    with vm.sender(sponsor), vm.value(650):
+        contract.fund_grant(grant_id).call()
+
+    before_grant = contract.get_grant(grant_id).call()
+    before_summary = contract.get_summary().call()
+    v2_code = (Path(__file__).parents[1] / "fixtures" / "AidTrailV2.py").read_bytes()
+    with vm.sender(upgrader):
+        contract.upgrade(v2_code).call()
+
+    assert contract.get_grant(grant_id).call() == before_grant
+    assert contract.get_summary().call() == before_summary
+    assert contract.storage_version().call() == 2
