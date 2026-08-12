@@ -12,6 +12,9 @@
     "test:run": "vitest run --passWithNoTests",
     "contract:test": "gltest tests/direct -v",
     "contract:integration": "gltest tests/integration -v",
+    "contract:lint": "genvm-lint lint contracts/AidTrail.py",
+    "contract:schema": "genvm-lint schema contracts/AidTrail.py",
+    "contract:validate": "genvm-lint validate contracts/AidTrail.py",
     "verify:live": "node scripts/verify-live.mjs",
     "deploy:dry-run": "npx tsx scripts/deploy.ts"
   },
