@@ -16,7 +16,11 @@ function injectedProvider(): InjectedProvider | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as Window & { ethereum?: InjectedProvider }).ethereum;
 }
-function isExpectedNetwork(chainId: string, expectedChainId?: string) { return !expectedChainId || chainId.toLowerCase() === expectedChainId.toLowerCase(); }
+function isExpectedNetwork(chainId: string, expectedChainId?: string) {
+  if (!expectedChainId) return true;
+  try { return BigInt(chainId) === BigInt(expectedChainId); }
+  catch { return chainId.toLowerCase() === expectedChainId.toLowerCase(); }
+}
 
 export function WalletProvider({ children, expectedChainId = process.env.NEXT_PUBLIC_GENLAYER_CHAIN_ID }: { children: ReactNode; expectedChainId?: string }) {
   const [state, setState] = useState<WalletState>({ status: "disconnected" });
