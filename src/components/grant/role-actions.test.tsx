@@ -35,4 +35,13 @@ describe("RoleActions", () => {
 
     expect(markup).not.toContain("Submit evidence");
   });
+
+  it.each(["PENDING", "REQUEST_MORE_INFO", "UNRESOLVED"] as const)("opens expiry for %s only after the 86,400 second cure period", (status) => {
+    const due = { ...milestone(status), deadline: 100n };
+    const beforeCure = renderToStaticMarkup(<RoleActions grant={grant} milestone={due} wallet={{ status: "connected", account: stranger }} now={86_500} />);
+    const afterCure = renderToStaticMarkup(<RoleActions grant={grant} milestone={due} wallet={{ status: "connected", account: stranger }} now={86_501} />);
+
+    expect(beforeCure).toMatch(/<button[^>]*disabled[^>]*>Expire grant/);
+    expect(afterCure).not.toMatch(/<button[^>]*disabled[^>]*>Expire grant/);
+  });
 });

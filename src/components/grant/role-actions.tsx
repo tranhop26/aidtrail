@@ -1,6 +1,7 @@
 "use client";
 
 import type { Grant, Milestone } from "../../lib/domain";
+import { isExpiryEligible } from "../../lib/workflow-readbacks";
 
 export type WalletForActions = {
   status: "disconnected" | "connecting" | "connected" | "wrong_network" | "rejected" | "unavailable";
@@ -12,6 +13,7 @@ export type GrantAction = "fund" | "withdraw_credit" | "submit_evidence" | "subm
 export interface RoleActionsProps {
   grant: Grant;
   milestone: Milestone;
+  milestones?: readonly Milestone[];
   wallet: WalletForActions;
   now?: number;
   challengeCredit?: bigint;
@@ -26,7 +28,7 @@ function ActionButton({ label, reason, onClick }: { label: string; reason?: stri
   return <div className="role-action"><button type="button" className="button" disabled={Boolean(reason)} title={reason} onClick={onClick}>{label}</button>{reason && <p className="role-action__reason">{reason}</p>}</div>;
 }
 
-export function RoleActions({ grant, milestone, wallet, now = 0, challengeCredit = 0n, onAction }: RoleActionsProps) {
+export function RoleActions({ grant, milestone, milestones = [milestone], wallet, now = 0, challengeCredit = 0n, onAction }: RoleActionsProps) {
   const connected = wallet.status === "connected" && Boolean(wallet.account);
   const sponsor = sameAddress(wallet.account, grant.sponsor);
   const beneficiary = sameAddress(wallet.account, grant.beneficiary);
@@ -34,7 +36,7 @@ export function RoleActions({ grant, milestone, wallet, now = 0, challengeCredit
   const needsWallet = connected ? undefined : "Connect an injected wallet on Studionet to continue.";
   const challengeOpen = milestone.challengeDeadline > 0n && BigInt(now) < milestone.challengeDeadline;
   const canFinalize = finalizable.has(milestone.status) && milestone.challengeDeadline > 0n && BigInt(now) >= milestone.challengeDeadline && !milestone.executionComplete;
-  const canExpire = grant.status === "ACTIVE" && milestone.deadline > 0n && BigInt(now) >= milestone.deadline && !milestone.executionComplete;
+  const canExpire = grant.status === "ACTIVE" && milestones.some((item) => isExpiryEligible(item, BigInt(now)));
 
   return <section className="role-actions" aria-label="Available contract actions">
     <h2>Contract actions</h2>

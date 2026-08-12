@@ -16,3 +16,11 @@ Verification run on 2026-08-12:
 - Verified `.next/server/app/dashboard/page.js` and `.next/server/app/grants/new/page.js` were emitted.
 
 Concern: the only remaining `async () => true` is a negative-path facade test fixture, not a production write action.
+
+## Follow-up: pagination and expiry reconciliation
+
+- Grant creation now snapshots and verifies the full grant list in contract-capped 50-item pages, matching every signed grant term.
+- Expiry is enabled only for `PENDING`, `REQUEST_MORE_INFO`, or `UNRESOLVED` milestones after the contract's strict `deadline + 86,400 seconds` cure boundary.
+- Expiry snapshots every milestone before submission and confirms every snapshot-eligible milestone was refunded and marked expired.
+
+Verification: 33 frontend tests, lint, typecheck, and production build passed.

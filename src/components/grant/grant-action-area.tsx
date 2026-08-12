@@ -12,9 +12,9 @@ import { ChallengeForm } from "../forms/challenge-form";
 import { createAidTrailContract } from "../../lib/genlayer/contract";
 import { createReadClient } from "../../lib/genlayer/read-client";
 import { createWriteClient } from "../../lib/genlayer/write-client";
-import { creditReadback, settlementReadback } from "../../lib/workflow-readbacks";
+import { creditReadback, expireGrantReadback, expiryMilestoneSnapshot, settlementReadback } from "../../lib/workflow-readbacks";
 
-export function GrantActionArea({ grant, milestone }: { grant: Grant; milestone: Milestone }) {
+export function GrantActionArea({ grant, milestone, milestones }: { grant: Grant; milestone: Milestone; milestones: readonly Milestone[] }) {
   const wallet = useWallet();
   const transaction = useTransaction();
   const [active, setActive] = useState<"fund" | "submit_evidence" | "challenge" | undefined>();
@@ -32,8 +32,8 @@ export function GrantActionArea({ grant, milestone }: { grant: Grant; milestone:
     if (wallet.status !== "connected" || !wallet.account || !wallet.provider) return;
     const writeClient = await createWriteClient(wallet.provider, wallet.account); const contract = createAidTrailContract({ address: process.env.NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS, readClient: createReadClient(), writeClient });
     if (action === "finalize") await transaction.execute(() => contract.finalizeMilestone({ grantId: grant.grantId, milestoneIndex: milestone.index, readback: settlementReadback(contract, grant.grantId, milestone.index, "finalize") }));
-    if (action === "expire") await transaction.execute(() => contract.expireGrant({ grantId: grant.grantId, readback: settlementReadback(contract, grant.grantId, milestone.index, "expire") }));
+    if (action === "expire") { const submittedAt = BigInt(Math.floor(Date.now() / 1000)); const before = await expiryMilestoneSnapshot(contract, grant.grantId, grant.milestoneCount); await transaction.execute(() => contract.expireGrant({ grantId: grant.grantId, readback: expireGrantReadback(contract, grant.grantId, before, submittedAt) })); }
     if (action === "withdraw_credit") { const before = await contract.readCredit(wallet.account); if (before.availability !== "available") throw new Error(before.reason); await transaction.execute(() => contract.withdrawCredit({ readback: creditReadback(contract, wallet.account!, before.data) })); }
   };
-  return <><RoleActions grant={grant} milestone={milestone} wallet={wallet} now={now} onAction={(action) => void act(action)} />{active === "fund" && <FundGrantForm grantId={grant.grantId} remaining={grant.escrowTarget - grant.funded} funded={grant.funded} status={grant.status} />}{active === "submit_evidence" && <EvidenceForm grant={grant} milestone={milestone} />}{active === "challenge" && <ChallengeForm grantId={grant.grantId} milestoneIndex={milestone.index} challengeBond={grant.challengeBond} challengeNonce={milestone.challengeNonce} status={milestone.status} />}{transaction.state.phase !== "awaiting_wallet" && <TransactionStatus state={transaction.state} />}</>;
+  return <><RoleActions grant={grant} milestone={milestone} milestones={milestones} wallet={wallet} now={now} onAction={(action) => void act(action)} />{active === "fund" && <FundGrantForm grantId={grant.grantId} remaining={grant.escrowTarget - grant.funded} funded={grant.funded} status={grant.status} />}{active === "submit_evidence" && <EvidenceForm grant={grant} milestone={milestone} />}{active === "challenge" && <ChallengeForm grantId={grant.grantId} milestoneIndex={milestone.index} challengeBond={grant.challengeBond} challengeNonce={milestone.challengeNonce} status={milestone.status} />}{transaction.state.phase !== "awaiting_wallet" && <TransactionStatus state={transaction.state} />}</>;
 }
