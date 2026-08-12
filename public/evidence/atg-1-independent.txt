@@ -1,0 +1,1 @@
+Independent Studionet test observation for ATG-1 milestone 1. The simulated record consistently describes two community water checkpoints in the Mekong Delta, their public locations, and commissioning records. This is testnet-only validation data, not a claim of real-world completion.
