@@ -20,6 +20,8 @@ from gltest.clients import get_gl_client
 from gltest.types import TransactionStatus
 from gltest.utils import extract_contract_address
 
+from accounting_proof import fee_adjusted_received_delta
+
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("AIDTRAIL_LIVE") != "1",
@@ -48,6 +50,38 @@ def content_hash(body: str) -> str:
     digest = keccak.new(digest_bits=256)
     digest.update(body.encode("utf-8"))
     return "0x" + digest.hexdigest()
+
+
+def submission_fee_fields(client, consensus_receipt: dict, payer: str) -> tuple[int, int]:
+    transaction_hash = consensus_receipt.get("tx_id") or consensus_receipt.get("hash")
+    if not transaction_hash:
+        pytest.fail("finalized withdrawal receipt omitted its transaction hash")
+    try:
+        evm_receipt = client.get_transaction_receipt(transaction_hash)
+    except Exception:
+        transaction = client.get_transaction(transaction_hash=transaction_hash)
+        activation_block = int(transaction["read_state_block_range"]["activation_block"])
+        sender_topic = "0x" + ("0" * 24) + payer.removeprefix("0x").lower()
+        logs = client.get_logs(
+            {
+                "fromBlock": max(0, activation_block - 1000),
+                "toBlock": min(client.block_number, activation_block + 10),
+                "address": client.chain.consensus_main_contract["address"],
+                "topics": [
+                    client.w3.keccak(text="NewTransaction(bytes32,address)").hex(),
+                    transaction_hash,
+                    sender_topic,
+                ],
+            }
+        )
+        if len(logs) != 1:
+            pytest.fail("could not bind the consensus withdrawal to one payer EVM receipt")
+        evm_receipt = client.get_transaction_receipt(logs[0]["transactionHash"])
+    gas_used = evm_receipt.get("gasUsed")
+    effective_gas_price = evm_receipt.get("effectiveGasPrice")
+    if gas_used is None or effective_gas_price is None:
+        pytest.fail("EVM receipt omitted gasUsed/effectiveGasPrice; fee proof cannot continue")
+    return int(gas_used), int(effective_gas_price)
 
 
 def grant_args(beneficiary: str, suffix: str, now: int) -> list:
@@ -215,6 +249,11 @@ def test_fresh_studionet_deploy_and_complete_workflow(live_accounts) -> None:
         wait_triggered_transactions_status=TransactionStatus.FINALIZED,
     )
     assert_finalized(withdrawal_receipt)
+    gas_used, effective_gas_price = submission_fee_fields(
+        client,
+        withdrawal_receipt,
+        live_accounts["sponsor"].address,
+    )
     payer_after = client.get_balance(live_accounts["sponsor"].address)
     contract_after = client.get_balance(address)
     sponsor_after = client.get_balance(live_accounts["sponsor"].address)
@@ -222,6 +261,10 @@ def test_fresh_studionet_deploy_and_complete_workflow(live_accounts) -> None:
 
     assert payer_before == sponsor_before and payer_after == sponsor_after
     assert contract_before - contract_after == 100
-    assert sponsor_after >= sponsor_before
+    assert sponsor_after - sponsor_before == fee_adjusted_received_delta(
+        100,
+        gas_used=gas_used,
+        effective_gas_price=effective_gas_price,
+    )
     assert contract.get_credit(args=[live_accounts["sponsor"].address]).call() == 0
     assert summary_after["completed_refunds"] - summary_before["completed_refunds"] == 100

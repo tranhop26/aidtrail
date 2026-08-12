@@ -33,3 +33,10 @@ The live integration checks intentionally remain gated until a human supplies a 
 - Live verification now retrieves deployed source via Studionet `gen_getContractCode`, requires its SHA-256 to equal the reviewed local source, compares the complete generated schema including signatures, and executes safe reads across version, accounting, credit, evidence-domain, pagination, and available grant/milestone state. Source retrieval failure is fatal; there is no local-only attestation fallback.
 
 Fresh evidence: focused upgrade 12/12 passed; full direct 107/107 passed; opt-in integration collected and safely skipped 1/1 without live authorization; lint/typecheck/dry-run/script syntax passed; V1/V2 semantic validation passed with 18/19 methods respectively. Existing bare-`ValueError` validator warnings remain outside this focused review round.
+
+## Narrow final fix round 2
+
+- EOA withdrawal proof now binds the GenLayer consensus receipt to the payer's EVM submission receipt and reads official `gasUsed` and `effectiveGasPrice` fields. It asserts the exact sponsor/payer delta as `withdrawn credit - transaction fee`, including the case where a tiny withdrawal is smaller than its fee, while retaining exact contract-balance and accounting deltas.
+- Deployment now explicitly waits for `FINALIZED`, requires `FINISHED_WITH_RETURN`, and extracts a valid address only from decoded deploy transaction data before emitting deployment facts. Focused receipt-validation tests cover success, merely accepted, execution failure, and missing-address cases.
+
+Fresh focused evidence: deploy receipt validation 4/4 passed; fee accounting 2/2 passed; live workflow safely skipped 1/1 without authorization; typecheck, lint, deployment dry-run, and diff check passed. No external call or deployment occurred.

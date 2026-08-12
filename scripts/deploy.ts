@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import { createAccount, createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
-import type { Hash } from "genlayer-js/types";
+import { ExecutionResult, TransactionStatus, type Hash } from "genlayer-js/types";
 
 const sourcePath = new URL("../contracts/AidTrail.py", import.meta.url);
 const dependencyPin = "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6";
@@ -19,6 +20,28 @@ function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required`);
   return value;
+}
+
+type DeploymentReceiptProof = {
+  statusName?: string;
+  txExecutionResultName?: string;
+  txDataDecoded?: { type?: string; contractAddress?: string } | null;
+};
+
+export function validateFinalizedDeployment(receipt: DeploymentReceiptProof): string {
+  if (receipt.statusName !== TransactionStatus.FINALIZED) {
+    throw new Error(`deployment transaction is not finalized: ${receipt.statusName ?? "unknown"}`);
+  }
+  if (receipt.txExecutionResultName !== ExecutionResult.FINISHED_WITH_RETURN) {
+    throw new Error(`deployment execution failed: ${receipt.txExecutionResultName ?? "unknown"}`);
+  }
+  const address = receipt.txDataDecoded?.type === "deploy"
+    ? receipt.txDataDecoded.contractAddress
+    : undefined;
+  if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    throw new Error("finalized deployment receipt did not contain a valid contract address");
+  }
+  return address;
 }
 
 async function main(): Promise<void> {
@@ -59,13 +82,15 @@ async function main(): Promise<void> {
   const transactionHash = await client.deployContract({ account, code: source, args: [] });
   const receipt = await client.waitForTransactionReceipt({
     hash: transactionHash as unknown as Hash,
+    status: TransactionStatus.FINALIZED,
   });
-  const address = (receipt as { contractAddress?: string }).contractAddress;
-  if (!address) throw new Error("deployment receipt did not contain a contract address");
+  const address = validateFinalizedDeployment(receipt);
   console.log(JSON.stringify({ ...output, address, transactionHash, deployerAddress: account.address }));
 }
 
-void main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "deployment failed");
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "deployment failed");
+    process.exitCode = 1;
+  });
+}
