@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+from copy import deepcopy
 import sys
 from typing import Any, NamedTuple, cast
 
@@ -93,6 +94,18 @@ class SenderVM:
     def expect_revert(self, message: str) -> Any:
         return self._direct_vm.expect_revert(message)
 
+    def mock_web(self, url: str, body: str) -> None:
+        self._direct_vm.mock_web(
+            "^" + url.replace(".", r"\.") + "$",
+            {"method": "GET", "status": 200, "body": body},
+        )
+
+    def mock_llm(self, response: str) -> None:
+        self._direct_vm.mock_llm("AidTrail evidence evaluation", response)
+
+    def clear_mocks(self) -> None:
+        self._direct_vm.clear_mocks()
+
 
 @pytest.fixture
 def vm(direct_vm: Any) -> SenderVM:
@@ -144,6 +157,72 @@ def valid_plan(beneficiary: Any) -> GrantPlan:
         challenge_window=86_400,
         schema_version=1,
     )
+
+
+@pytest.fixture
+def active_grant(contract: ContractCalls, vm: SenderVM, sponsor: Any, valid_plan: GrantPlan) -> str:
+    with vm.sender(sponsor):
+        grant_id = contract.create_grant(*valid_plan).call()
+    with vm.sender(sponsor), vm.value(valid_plan.escrow_target):
+        contract.fund_grant(grant_id).call()
+    return grant_id
+
+
+@pytest.fixture
+def valid_pack(
+    active_grant: str,
+    beneficiary: Any,
+    contract: ContractCalls,
+    valid_plan: GrantPlan,
+) -> dict[str, Any]:
+    milestone = contract.get_milestone(active_grant, 0).call()
+    domain = contract.get_evidence_domain().call()
+    return {
+        "schema_version": 1,
+        "action": "SUBMIT_EVIDENCE",
+        "network": domain["network"],
+        "contract_replay_marker": domain["contract_replay_marker"],
+        "grant_id": active_grant,
+        "milestone_index": 0,
+        "submission_nonce": 1,
+        "issuer": beneficiary.as_hex,
+        "subject": {
+            "project_name": valid_plan.project_name,
+            "project_reference": valid_plan.project_reference,
+            "region": valid_plan.region,
+            "milestone_title": valid_plan.milestone_titles[0],
+            "criteria_hash": milestone["criteria_hash"],
+        },
+        "dates": {
+            "period_start": 1_782_864_000,
+            "period_end": 1_785_542_400,
+            "issued_at": 1_785_628_800,
+        },
+        "report": {
+            "url": "https://beneficiary.example/reports/atg-1-survey",
+            "content_hash": "0x" + "11" * 32,
+        },
+        "independent_sources": [
+            {
+                "url": "https://observer.example/atg-1-survey",
+                "content_hash": "0x" + "22" * 32,
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def approval_result() -> str:
+    return (
+        '{"verdict":"PROVISIONAL_APPROVAL","confidence":"HIGH",'
+        '"facts":["survey published","Chiang Rai","period matched"],'
+        '"provenance":"report and independent observer agree",'
+        '"missing_fields":[],"contradictions":[],"rationale":"criteria met"}'
+    )
+
+
+def copy_pack(pack: dict[str, Any]) -> dict[str, Any]:
+    return cast(dict[str, Any], deepcopy(pack))
 
 
 def call_create(contract: ContractCalls, vm: SenderVM, sponsor: Any, plan: GrantPlan) -> None:
