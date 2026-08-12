@@ -3,7 +3,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 
 import type { Address } from "../../lib/domain";
-import type { InjectedProvider } from "../../lib/genlayer/write-client";
+import { createWriteClient, type InjectedProvider } from "../../lib/genlayer/write-client";
 
 export type WalletStatus = "disconnected" | "connecting" | "connected" | "wrong_network" | "rejected" | "unavailable";
 export interface WalletState { status: WalletStatus; account?: Address; chainId?: string; error?: string; provider?: InjectedProvider; }
@@ -46,7 +46,13 @@ export function WalletProvider({ children, expectedChainId = process.env.NEXT_PU
     const provider = injectedProvider();
     if (!provider) { setState(unavailable); return; }
     setState({ status: "connecting", provider });
-    try { const [accounts, chainId] = await Promise.all([provider.request({ method: "eth_requestAccounts" }), provider.request({ method: "eth_chainId" })]); update(accounts, chainId, provider); }
+    try {
+      const accounts = await provider.request({ method: "eth_requestAccounts" });
+      const selected = Array.isArray(accounts) ? accounts[0] : undefined;
+      if (typeof selected !== "string") throw new Error("The wallet did not return an account.");
+      await createWriteClient(provider, selected);
+      update(accounts, await provider.request({ method: "eth_chainId" }), provider);
+    }
     catch (error) { setState({ status: "rejected", provider, error: error instanceof Error ? error.message : "Wallet connection was rejected." }); }
   }, [update]);
   const disconnect = useCallback(() => setState((current) => ({ status: "disconnected", provider: current.provider })), []);
