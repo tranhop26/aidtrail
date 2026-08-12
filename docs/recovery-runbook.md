@@ -8,6 +8,8 @@ AidTrail settles simulated Studionet GEN only. The deployer is the single testne
 2. Compare the candidate source hash with the reviewed artifact. Existing class storage declarations must remain in exactly the same order; new declarations may be appended only.
 3. Run the direct upgrade tests and a Studionet dry/schema check. Publish the proposed source hash and rollback source hash before sending an upgrade.
 
+The live verifier uses Studionet's `gen_getContractCode` read to hash the deployed source and requires an exact match with the reviewed local source. It also compares the complete generated method signatures and exercises safe read methods. If the node cannot return deployed source, verification stops; no local-only hash or operator assertion is treated as proof of deployed code.
+
 ## Compatible rollback
 
 1. Use the authorized deployment wallet to call `upgrade` with the exact, previously verified compatible source bytes.

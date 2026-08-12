@@ -154,6 +154,7 @@ class AidTrail(gl.Contract):
     returned_bond_credits: TreeMap[Address, u256]
     slashed_bond_credits: TreeMap[Address, u256]
     implementation_version: u256
+    v2_activation_marker: bool
 
     def __init__(self):
         self.next_grant_number = u256(0)
@@ -168,6 +169,7 @@ class AidTrail(gl.Contract):
         self.returned_bonds = u256(0)
         self.slashed_bonds = u256(0)
         self.implementation_version = u256(1)
+        self.v2_activation_marker = True
         root = gl.storage.Root.get()
         root.upgraders.get().append(gl.message.sender_address)
 
@@ -188,7 +190,6 @@ class AidTrail(gl.Contract):
         # that are not in root.upgraders; storage fields are intentionally untouched.
         code.truncate()
         code.extend(new_code)
-        self.implementation_version = u256(2)
 
     @gl.public.write
     def create_grant(
@@ -579,7 +580,14 @@ class AidTrail(gl.Contract):
 
     @gl.public.view
     def storage_version(self) -> u256:
-        return self.implementation_version
+        return u256(2)
+
+    @gl.public.view
+    def get_v2_implementation_info(self) -> dict:
+        return {
+            "storage_version": u256(2),
+            "append_only_marker": self.v2_activation_marker,
+        }
 
     @gl.public.view
     def get_summary(self) -> dict:
@@ -1599,4 +1607,3 @@ class AidTrail(gl.Contract):
             + "|"
             + evidence_pack_hash
         )
-

@@ -187,7 +187,7 @@ def test_upgrade_rejects_a_sender_outside_the_root_upgrader_list(contract, vm, s
 
 
 def test_upgrade_keeps_grants_and_accounting_readable_from_v2(
-    contract, vm, sponsor, upgrader, valid_plan
+    contract, vm, direct_vm, sponsor, upgrader, valid_plan
 ):
     # Break caught: a compatible code upgrade reinitializes or changes existing grant/accounting state.
     with vm.sender(sponsor):
@@ -201,6 +201,30 @@ def test_upgrade_keeps_grants_and_accounting_readable_from_v2(
     with vm.sender(upgrader):
         contract.upgrade(v2_code).call()
 
-    assert contract.get_grant(grant_id).call() == before_grant
-    assert contract.get_summary().call() == before_summary
-    assert contract.storage_version().call() == 2
+    from gltest.direct.loader import _make_contract_proxy, load_contract_class
+    import genlayer.gl.genvm_contracts as genvm_contracts
+
+    previous_contract = genvm_contracts.__known_contract__
+    genvm_contracts.__known_contract__ = None
+    try:
+        v2_class = load_contract_class(
+            Path(__file__).parents[1] / "fixtures" / "AidTrailV2.py", direct_vm
+        )
+    finally:
+        genvm_contracts.__known_contract__ = previous_contract
+    from genlayer.py.storage import ROOT_SLOT_ID
+    from genlayer.py.storage._internal.generate import Lit, _storage_build
+
+    v2_descriptor = _storage_build(v2_class, {})
+    assert not isinstance(v2_descriptor, Lit)
+    v2_instance = v2_descriptor.get(direct_vm._storage.get_store_slot(ROOT_SLOT_ID), 0)
+    upgraded = type(contract)(
+        _make_contract_proxy(v2_instance)
+    )
+    assert upgraded.get_grant(grant_id).call() == before_grant
+    assert upgraded.get_summary().call() == before_summary
+    assert upgraded.storage_version().call() == 2
+    assert upgraded.get_v2_implementation_info().call() == {
+        "storage_version": 2,
+        "append_only_marker": False,
+    }

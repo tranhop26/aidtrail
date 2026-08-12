@@ -7,3 +7,7 @@ networks:
     id: 61127
     url: http://127.0.0.1:4000
     chain_type: localnet
+  studionet:
+    id: 61999
+    url: https://studio.genlayer.com/api
+    chain_type: studionet

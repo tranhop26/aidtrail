@@ -24,3 +24,12 @@
 ## Concern
 
 The live integration checks intentionally remain gated until a human supplies a real Studionet deployment and credentials; no external action was taken in this task.
+
+## Important-finding fix round 1
+
+- V2 is now materially distinct: it appends `v2_activation_marker`, reports version 2 from V2 code, and exposes V2-only `get_v2_implementation_info()`. The direct upgrade test rebuilds a V2-backed proxy over the same root storage and proves the funded grant and complete accounting summary remain unchanged.
+- The opt-in integration body now performs a fresh Studionet deployment, checks consensus finality separately from execution, creates/funds approval and rejection grants, submits bound public evidence fixtures through validator consensus, exercises an invalid sender, permissionlessly finalizes payout/refund, and proves EOA withdrawal with payer/contract/sponsor plus accounting readbacks. It safe-skips unless `AIDTRAIL_LIVE=1`; the live command must explicitly select `--network studionet`.
+- `gltest.config.yaml` now declares the official SDK Studionet ID (`61999`) and endpoint. Deploy and verify scripts require that exact SDK endpoint and independently query the remote chain ID before continuing.
+- Live verification now retrieves deployed source via Studionet `gen_getContractCode`, requires its SHA-256 to equal the reviewed local source, compares the complete generated schema including signatures, and executes safe reads across version, accounting, credit, evidence-domain, pagination, and available grant/milestone state. Source retrieval failure is fatal; there is no local-only attestation fallback.
+
+Fresh evidence: focused upgrade 12/12 passed; full direct 107/107 passed; opt-in integration collected and safely skipped 1/1 without live authorization; lint/typecheck/dry-run/script syntax passed; V1/V2 semantic validation passed with 18/19 methods respectively. Existing bare-`ValueError` validator warnings remain outside this focused review round.

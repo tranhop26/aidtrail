@@ -188,7 +188,6 @@ class AidTrail(gl.Contract):
         # that are not in root.upgraders; storage fields are intentionally untouched.
         code.truncate()
         code.extend(new_code)
-        self.implementation_version = u256(2)
 
     @gl.public.write
     def create_grant(
@@ -579,7 +578,7 @@ class AidTrail(gl.Contract):
 
     @gl.public.view
     def storage_version(self) -> u256:
-        return self.implementation_version
+        return u256(1)
 
     @gl.public.view
     def get_summary(self) -> dict:
