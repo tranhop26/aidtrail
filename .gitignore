@@ -14,3 +14,4 @@ docs/live-verification.json
 __pycache__/
 .pytest_cache/
 .venv/
+.vercel

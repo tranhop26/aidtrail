@@ -51,7 +51,7 @@ wsl.exe -e bash -lc "cd /mnt/c/.../aidtrail && gltest tests/direct -v"
 npm run deploy:dry-run
 ```
 
-Use `npm run dev` for the frontend. The verified Studionet deployment is `0xf46BDF97cf4c125AeBf8a422094C64539535feA5`; set it in `NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS`. Connect a Studionet wallet to create, fund, submit evidence, challenge, finalize, expire, deposit credit, or withdraw. Every terminal UI success needs a finalized receipt and matching readback.
+Use `npm run dev` for the frontend. The verified Studionet deployment is `0x68848ba962a2ff80F1CEC4529A4c79d5D35f2C3C`; set it in `NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS`. Connect a Studionet wallet to create, fund, submit evidence, challenge, finalize, expire, deposit credit, or withdraw. Every terminal UI success needs a finalized receipt and matching readback.
 
 Integration tests are available as `npm run contract:integration`; they require a suitable GenLayer endpoint and are not a substitute for the post-deployment verifier.
 
@@ -82,7 +82,7 @@ Known testnet limits: only the deployment and safe readbacks are proven live so 
 | `npm run test:run` | 34 passed in 8 test files |
 | `npm run lint`, `npm run typecheck`, `npm run build` | Passed |
 | `npm run deploy:dry-run` | Passed; produced null address/transaction/deployer as expected and source hash `0x43e80fa976b74900a06a71374f9ce251f0be92f627eed45948eda9ddcf1bb637` |
-| `npm run verify:live -- 0xf46BDF97cf4c125AeBf8a422094C64539535feA5` | Passed on Studionet chain `61999`: exact source hash and full schema match; safe reads returned storage version `1`, zeroed accounting, and the address-bound evidence domain |
+| `npm run verify:live -- 0x68848ba962a2ff80F1CEC4529A4c79d5D35f2C3C` | Passed on Studionet chain `61999`: exact source hash and full schema match; safe reads returned storage version `1`, zeroed accounting, and the address-bound evidence domain |
 
 Contract-to-frontend parity was reviewed against the generated schema: all fourteen contract-facade operations map to exact schema names—eight writes (`create_grant`, `fund_grant`, `submit_evidence`, `challenge_milestone`, `finalize_milestone`, `expire_grant`, `deposit_challenge_credit`, `withdraw_credit`) and six reads (`get_grant`, `list_grants`, `get_milestone`, `get_summary`, `get_credit`, `get_evidence_domain`). The schema also exposes `upgrade`, `storage_version`, and evidence/challenge-record reads for operator/audit use. Direct tests cover contract actions; frontend component/unit tests cover forms, action availability, facade mapping, transaction/readback behavior, and rendering. Future terminal actions are represented in the proof matrix.
 
