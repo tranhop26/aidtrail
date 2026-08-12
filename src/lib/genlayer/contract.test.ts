@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { createAidTrailContract } from "./contract";
 
 describe("AidTrail contract facade", () => {
+  it("reads the contract-derived evidence replay domain", async () => {
+    const readClient = { readContract: async () => ({ network: "genlayer:61999", contract_replay_marker: "AIDTRAIL:EVIDENCE:V1:0xabc" }) };
+    const contract = createAidTrailContract({ address: "0x1111111111111111111111111111111111111111", readClient });
+
+    await expect(contract.readEvidenceDomain()).resolves.toEqual({ availability: "available", data: { network: "genlayer:61999", contractReplayMarker: "AIDTRAIL:EVIDENCE:V1:0xabc" } });
+  });
   it("keeps reads visibly unavailable when no deployed address is configured", async () => {
     const contract = createAidTrailContract({ address: undefined, readClient: { readContract: async () => ({}) } });
 

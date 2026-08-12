@@ -16,6 +16,7 @@ export interface MilestoneInput extends ReadbackInput { grantId: string; milesto
 export interface SubmitEvidenceInput extends MilestoneInput { evidenceJson: string; }
 export interface ChallengeMilestoneInput extends MilestoneInput { counterEvidenceJson: string; }
 export interface DepositChallengeCreditInput extends ReadbackInput { amount: bigint; }
+export interface EvidenceDomain { network: string; contractReplayMarker: string; }
 
 export interface AidTrailContract {
   readGrant(grantId: string): Promise<ReadAvailability<Grant>>;
@@ -23,6 +24,7 @@ export interface AidTrailContract {
   readMilestone(grantId: string, milestoneIndex: bigint): Promise<ReadAvailability<Milestone>>;
   readSummary(): Promise<ReadAvailability<Summary>>;
   readCredit(owner: Address): Promise<ReadAvailability<bigint>>;
+  readEvidenceDomain(): Promise<ReadAvailability<EvidenceDomain>>;
   createGrant(input: CreateGrantInput): Promise<SubmittedWrite>;
   fundGrant(input: FundGrantInput): Promise<SubmittedWrite>;
   submitEvidence(input: SubmitEvidenceInput): Promise<SubmittedWrite>;
@@ -63,6 +65,12 @@ export function createAidTrailContract(options: ContractOptions): AidTrailContra
       if (typeof raw === "bigint") return raw;
       if (typeof raw === "string" && /^\d+$/.test(raw)) return BigInt(raw);
       throw new Error("contract get_credit result must be a non-negative bigint string");
+    }),
+    readEvidenceDomain: () => read(aidTrailMethod.getEvidenceDomain, [], (raw) => {
+      if (!raw || typeof raw !== "object") throw new Error("contract evidence domain must be an object");
+      const value = raw as Record<string, unknown>;
+      if (typeof value.network !== "string" || typeof value.contract_replay_marker !== "string") throw new Error("contract evidence domain is malformed");
+      return { network: value.network, contractReplayMarker: value.contract_replay_marker };
     }),
     createGrant: (input) => submit(aidTrailMethod.createGrant, [input.beneficiary, input.projectName, input.organization, input.projectReference, input.region, input.category, input.description, input.escrowTarget, input.milestoneTitles, input.milestoneCriteria, input.allocations, input.deadlines, input.evidenceRequirements, input.minIndependentSources, input.evidencePolicyVersion, input.challengeBond, input.challengeWindow, input.schemaVersion], 0n, input.readback),
     fundGrant: (input) => submit(aidTrailMethod.fundGrant, [input.grantId], input.amount, input.readback),
