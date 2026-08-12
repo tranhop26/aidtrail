@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
+from datetime import UTC, datetime
 import sys
 from typing import Any, NamedTuple, cast
 
@@ -104,6 +105,9 @@ class SenderVM:
     def mock_llm(self, response: str) -> None:
         self._direct_vm.mock_llm("AidTrail evidence evaluation", response)
 
+    def mock_appeal_llm(self, response: str) -> None:
+        self._direct_vm.mock_llm("AidTrail appeal evaluation", response)
+
     @contextmanager
     def capture_llm_prompts(self) -> Iterator[list[str]]:
         prompts: list[str] = []
@@ -121,6 +125,9 @@ class SenderVM:
 
     def clear_mocks(self) -> None:
         self._direct_vm.clear_mocks()
+
+    def set_datetime(self, value: int) -> None:
+        self._direct_vm.warp(datetime.fromtimestamp(value, UTC).isoformat())
 
 
 @pytest.fixture
@@ -141,6 +148,16 @@ def beneficiary() -> Any:
 @pytest.fixture
 def stranger() -> Any:
     return create_address("stranger")
+
+
+@pytest.fixture
+def challenger() -> Any:
+    return create_address("challenger")
+
+
+@pytest.fixture
+def keeper() -> Any:
+    return create_address("keeper")
 
 
 @pytest.fixture

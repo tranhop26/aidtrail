@@ -155,3 +155,23 @@ def test_list_grants_returns_deterministic_capped_page(contract, vm, sponsor, va
     assert first_page[0]["grant_id"] == "ATG-1"
     assert first_page[-1]["grant_id"] == "ATG-50"
     assert [grant["grant_id"] for grant in second_page] == ["ATG-51", "ATG-52"]
+
+
+def test_expired_allocation_becomes_exact_sponsor_eoa_credit_once(
+    active_grant, contract, vm, sponsor, keeper
+):
+    # Break caught: expiry refunds through a keeper, transfers early, or leaves its sponsor credit unaccounted.
+    milestone = contract.get_milestone(active_grant, 0).call()
+    vm.set_datetime(milestone["deadline"] + 86_401)
+    with vm.sender(keeper):
+        contract.expire_grant(active_grant).call()
+    before_withdrawal = contract.get_summary().call()
+    assert contract.get_credit(sponsor).call() == 100
+    assert_conserved(before_withdrawal)
+
+    with vm.capture_external_messages() as messages, vm.sender(sponsor):
+        contract.withdraw_credit().call()
+
+    assert messages == [{"EthSend": {"address": sponsor, "calldata": b"", "value": 100}}]
+    assert contract.get_credit(sponsor).call() == 0
+    assert_conserved(contract.get_summary().call())
