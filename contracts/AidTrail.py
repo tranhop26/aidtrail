@@ -885,7 +885,9 @@ class AidTrail(gl.Contract):
         if host == "localhost" or host.endswith(".localhost"):
             raise ValueError("invalid evidence URL")
         labels = host.split(".")
-        if len(labels) < 2 or all(label.isdigit() for label in labels):
+        if len(labels) < 2 or all(
+            self._is_numeric_authority_label(label) for label in labels
+        ):
             raise ValueError("invalid evidence URL")
         for label in labels:
             if len(label) == 0 or label[0] == "-" or label[-1] == "-":
@@ -894,6 +896,16 @@ class AidTrail(gl.Contract):
                 if character not in "abcdefghijklmnopqrstuvwxyz0123456789-":
                     raise ValueError("invalid evidence URL")
         return host
+
+    def _is_numeric_authority_label(self, label: str) -> bool:
+        if label.isdigit():
+            return True
+        if not label.startswith("0x") or len(label) == 2:
+            return False
+        for character in label[2:]:
+            if character not in "0123456789abcdef":
+                return False
+        return True
 
     def _validate_content_hash(self, content_hash) -> None:
         if not isinstance(content_hash, str) or len(content_hash) != 66:

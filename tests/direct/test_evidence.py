@@ -164,6 +164,9 @@ def test_fetched_content_hash_mismatch_cannot_create_favorable_verdict(
         "https://127.0.1/report",
         "https://0177.0.0.1/report",
         "https://0x7f000001/report",
+        "https://0x7f.0.0.1/report",
+        "https://127.0x0.0.1/report",
+        "https://127.0.0x0.1/report",
         "https://[::1]/report",
     ],
 )

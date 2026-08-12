@@ -69,6 +69,15 @@ Result: exit 0; `62 passed in 5.11s`.
 All commands below were freshly run from the Task 3 worktree.
 
 - `git diff --check`: exit 0.
+
+## Fix round 3: Mixed numeric IPv4 authorities
+
+- Added focused regressions for `0x7f.0.0.1`, `127.0x0.0.1`, and `127.0.0x0.1`. The pre-fix URL command exited 1 with `3 failed, 15 passed`; these forms passed the contract's hostname validation and can be normalized to loopback by standard URL parsers.
+- The canonical hostname validator now classifies each authority label as decimal numeric or a valid `0x` hexadecimal numeric token and rejects an authority composed entirely of numeric tokens. Normal dotted DNS names remain valid.
+- Focused URL command: exit 0; `18 passed in 1.64s`.
+- Full WSL direct suite: exit 0; `97 passed in 7.68s`.
+- `$env:PYTHONIOENCODING='utf-8'; genvm-lint validate contracts/AidTrail.py`: exit 0; semantic validation passed with 11 methods (7 view, 4 write).
+- `git diff --check`: exit 0.
 - `wsl.exe --cd '/mnt/c/Users/admin/Documents/Codex/2026-08-12/tham-kh-o-ki-n-tr/.worktrees/aidtrail' /home/tranhop/.local/bin/gltest tests/direct -v`: exit 0; `62 passed in 5.11s`.
 - `$env:PYTHONIOENCODING='utf-8'; genvm-lint lint contracts/AidTrail.py`: exit 0; two AST checks passed. It emits existing bare-`ValueError` style warnings, including pre-Task-3 validation code; no warning is promoted to an error.
 - `$env:PYTHONIOENCODING='utf-8'; genvm-lint schema contracts/AidTrail.py`: exit 0; schema lists `submit_evidence`, `get_evidence_domain`, and `get_evidence_record` among 11 methods.
