@@ -8,8 +8,10 @@ from genlayer import Address, DynArray, Keccak256, TreeMap, allow_storage, gl, u
 
 SCHEMA_VERSION = u256(1)
 FUNDING = "FUNDING"
+ACTIVE = "ACTIVE"
 PENDING = "PENDING"
 MAX_MILESTONES = 5
+MAX_PAGE_SIZE = u256(50)
 MAX_IDENTITY_TEXT = 128
 MAX_DESCRIPTION_TEXT = 2_048
 MAX_CRITERIA_TEXT = 1_024
@@ -37,6 +39,8 @@ class Grant:
     challenge_bond: u256
     challenge_window: u256
     status: str
+    funded: u256
+    reserved: u256
 
 
 @allow_storage
@@ -79,9 +83,30 @@ class AidTrail(gl.Contract):
     next_grant_number: u256
     grants: TreeMap[str, Grant]
     milestones: TreeMap[str, Milestone]
+    credits: TreeMap[Address, u256]
+    grant_inflows: u256
+    challenge_credit_inflows: u256
+    available: u256
+    reserved_milestone_escrow: u256
+    completed_payouts: u256
+    completed_refunds: u256
+    available_credits: u256
+    reserved_bonds: u256
+    returned_bonds: u256
+    slashed_bonds: u256
 
     def __init__(self):
         self.next_grant_number = u256(0)
+        self.grant_inflows = u256(0)
+        self.challenge_credit_inflows = u256(0)
+        self.available = u256(0)
+        self.reserved_milestone_escrow = u256(0)
+        self.completed_payouts = u256(0)
+        self.completed_refunds = u256(0)
+        self.available_credits = u256(0)
+        self.reserved_bonds = u256(0)
+        self.returned_bonds = u256(0)
+        self.slashed_bonds = u256(0)
         root = gl.storage.Root.get()
         root.upgraders.get().append(gl.message.sender_address)
 
@@ -167,6 +192,8 @@ class AidTrail(gl.Contract):
             challenge_bond,
             challenge_window,
             FUNDING,
+            u256(0),
+            u256(0),
         )
 
         for index in range(len(milestone_titles)):
@@ -187,11 +214,115 @@ class AidTrail(gl.Contract):
         self.next_grant_number = grant_number
         return grant_id
 
+    @gl.public.write.payable
+    def fund_grant(self, grant_id: str) -> None:
+        grant = self.grants.get(grant_id)
+        if grant is None:
+            raise ValueError("grant not found")
+        if grant.sponsor != gl.message.sender_address:
+            raise ValueError("only sponsor can fund grant")
+        if gl.message.value == 0:
+            raise ValueError("funding amount must be positive")
+        if grant.status != FUNDING:
+            raise ValueError("grant is not accepting funding")
+
+        required = grant.escrow_target - grant.funded
+        accepted = gl.message.value
+        if accepted > required:
+            accepted = required
+        excess = gl.message.value - accepted
+
+        grant.funded += accepted
+        self.grant_inflows += gl.message.value
+        self.available += accepted
+        if excess > 0:
+            credit = self.credits.get(grant.sponsor)
+            if credit is None:
+                credit = u256(0)
+            self.credits[grant.sponsor] = credit + excess
+            self.available_credits += excess
+
+        if grant.funded == grant.escrow_target:
+            grant.status = ACTIVE
+            grant.reserved = grant.escrow_target
+            self.available -= grant.escrow_target
+            self.reserved_milestone_escrow += grant.escrow_target
+
+        self.grants[grant_id] = grant
+
+    @gl.public.write
+    def withdraw_credit(self) -> None:
+        owner = gl.message.sender_address
+        credit = self.credits.get(owner)
+        if credit is None or credit == 0:
+            raise ValueError("no credit available")
+
+        self.credits[owner] = u256(0)
+        self.available_credits -= credit
+        self.completed_refunds += credit
+        gl.get_contract_at(owner).emit_transfer(value=credit)
+
     @gl.public.view
     def get_grant(self, grant_id: str) -> dict:
         grant = self.grants.get(grant_id)
         if grant is None:
             raise ValueError("grant not found")
+        return self._grant_dict(grant)
+
+    @gl.public.view
+    def get_summary(self) -> dict:
+        return {
+            "grant_inflows": self.grant_inflows,
+            "challenge_credit_inflows": self.challenge_credit_inflows,
+            "available": self.available,
+            "reserved_milestone_escrow": self.reserved_milestone_escrow,
+            "completed_payouts": self.completed_payouts,
+            "completed_refunds": self.completed_refunds,
+            "available_credits": self.available_credits,
+            "reserved_bonds": self.reserved_bonds,
+            "returned_bonds": self.returned_bonds,
+            "slashed_bonds": self.slashed_bonds,
+        }
+
+    @gl.public.view
+    def list_grants(self, offset: u256, limit: u256) -> list:
+        capped_limit = limit
+        if capped_limit > MAX_PAGE_SIZE:
+            capped_limit = MAX_PAGE_SIZE
+        grants: list[dict] = []
+        end = offset + capped_limit
+        if end > self.next_grant_number:
+            end = self.next_grant_number
+        for grant_number in range(int(offset) + 1, int(end) + 1):
+            grants.append(self._grant_dict(self.grants["ATG-" + str(grant_number)]))
+        return grants
+
+    @gl.public.view
+    def get_credit(self, owner: Address) -> u256:
+        credit = self.credits.get(owner)
+        if credit is None:
+            return u256(0)
+        return credit
+
+    @gl.public.view
+    def get_milestone(self, grant_id: str, milestone_index: u256) -> dict:
+        milestone = self.milestones.get(self._milestone_key(grant_id, milestone_index))
+        if milestone is None:
+            raise ValueError("milestone not found")
+        return {
+            "grant_id": milestone.grant_id,
+            "index": milestone.index,
+            "title": milestone.title,
+            "criteria": milestone.criteria,
+            "allocation": milestone.allocation,
+            "deadline": milestone.deadline,
+            "evidence_requirement": milestone.evidence_requirement,
+            "min_independent_sources": milestone.min_independent_sources,
+            "criteria_hash": milestone.criteria_hash,
+            "status": milestone.status,
+        }
+
+    def _grant_dict(self, grant: Grant) -> dict:
         return {
             "grant_id": grant.grant_id,
             "schema_version": grant.schema_version,
@@ -210,24 +341,8 @@ class AidTrail(gl.Contract):
             "challenge_bond": grant.challenge_bond,
             "challenge_window": grant.challenge_window,
             "status": grant.status,
-        }
-
-    @gl.public.view
-    def get_milestone(self, grant_id: str, milestone_index: u256) -> dict:
-        milestone = self.milestones.get(self._milestone_key(grant_id, milestone_index))
-        if milestone is None:
-            raise ValueError("milestone not found")
-        return {
-            "grant_id": milestone.grant_id,
-            "index": milestone.index,
-            "title": milestone.title,
-            "criteria": milestone.criteria,
-            "allocation": milestone.allocation,
-            "deadline": milestone.deadline,
-            "evidence_requirement": milestone.evidence_requirement,
-            "min_independent_sources": milestone.min_independent_sources,
-            "criteria_hash": milestone.criteria_hash,
-            "status": milestone.status,
+            "funded": grant.funded,
+            "reserved": grant.reserved,
         }
 
     def _validate_plan(

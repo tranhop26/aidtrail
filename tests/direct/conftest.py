@@ -62,6 +62,15 @@ class SenderVM:
         with self._direct_vm.prank(address):
             yield
 
+    @contextmanager
+    def value(self, amount: int) -> Iterator[None]:
+        previous_value = self._direct_vm.value
+        self._direct_vm.value = amount
+        try:
+            yield
+        finally:
+            self._direct_vm.value = previous_value
+
     def expect_revert(self, message: str) -> Any:
         return self._direct_vm.expect_revert(message)
 
@@ -79,6 +88,11 @@ def sponsor() -> Any:
 @pytest.fixture
 def beneficiary() -> Any:
     return create_address("beneficiary")
+
+
+@pytest.fixture
+def stranger() -> Any:
+    return create_address("stranger")
 
 
 @pytest.fixture
