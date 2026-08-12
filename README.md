@@ -51,7 +51,7 @@ wsl.exe -e bash -lc "cd /mnt/c/.../aidtrail && gltest tests/direct -v"
 npm run deploy:dry-run
 ```
 
-Use `npm run dev` for the frontend. Configure a real, verified contract address in `NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS`; until then, reads remain explicitly unavailable and preview data is labeled non-authoritative. Connect a Studionet wallet to create, fund, submit evidence, challenge, finalize, expire, deposit credit, or withdraw. Every terminal UI success needs a finalized receipt and matching readback.
+Use `npm run dev` for the frontend. The verified Studionet deployment is `0xf46BDF97cf4c125AeBf8a422094C64539535feA5`; set it in `NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS`. Connect a Studionet wallet to create, fund, submit evidence, challenge, finalize, expire, deposit credit, or withdraw. Every terminal UI success needs a finalized receipt and matching readback.
 
 Integration tests are available as `npm run contract:integration`; they require a suitable GenLayer endpoint and are not a substitute for the post-deployment verifier.
 
@@ -69,7 +69,7 @@ The verifier fails closed if there is no real address, an endpoint mismatch, a s
 
 AidTrail is upgradable on testnet by the deployer. Compatible upgrades preserve storage declaration order; incompatible changes require a new deployment and a proven migration inventory. The documented rollback, freeze, and withdrawal-evidence procedures are in [docs/recovery-runbook.md](docs/recovery-runbook.md). Removing all upgraders is irreversible.
 
-Known release-candidate limits: no live contract has been deployed or verified; the app relies on external wallet/network availability; evidence availability and consensus can yield non-settling results; and testnet GEN is simulated only.
+Known testnet limits: only the deployment and safe readbacks are proven live so far; end-to-end actor workflow rows remain marked unexecuted in the proof matrix. The app relies on external wallet/network availability; evidence availability and consensus can yield non-settling results; and testnet GEN is simulated only.
 
 ## Observed local release gate — 2026-08-12
 
@@ -82,7 +82,7 @@ Known release-candidate limits: no live contract has been deployed or verified; 
 | `npm run test:run` | 34 passed in 8 test files |
 | `npm run lint`, `npm run typecheck`, `npm run build` | Passed |
 | `npm run deploy:dry-run` | Passed; produced null address/transaction/deployer as expected and source hash `0x43e80fa976b74900a06a71374f9ce251f0be92f627eed45948eda9ddcf1bb637` |
-| `npm run verify:live` | Not yet executed against a deployment: correctly failed closed because no real contract address was supplied |
+| `npm run verify:live -- 0xf46BDF97cf4c125AeBf8a422094C64539535feA5` | Passed on Studionet chain `61999`: exact source hash and full schema match; safe reads returned storage version `1`, zeroed accounting, and the address-bound evidence domain |
 
 Contract-to-frontend parity was reviewed against the generated schema: all fourteen contract-facade operations map to exact schema names—eight writes (`create_grant`, `fund_grant`, `submit_evidence`, `challenge_milestone`, `finalize_milestone`, `expire_grant`, `deposit_challenge_credit`, `withdraw_credit`) and six reads (`get_grant`, `list_grants`, `get_milestone`, `get_summary`, `get_credit`, `get_evidence_domain`). The schema also exposes `upgrade`, `storage_version`, and evidence/challenge-record reads for operator/audit use. Direct tests cover contract actions; frontend component/unit tests cover forms, action availability, facade mapping, transaction/readback behavior, and rendering. Future terminal actions are represented in the proof matrix.
 
