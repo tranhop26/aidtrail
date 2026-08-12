@@ -69,7 +69,7 @@ The verifier fails closed if there is no real address, an endpoint mismatch, a s
 
 AidTrail is upgradable on testnet by the deployer. Compatible upgrades preserve storage declaration order; incompatible changes require a new deployment and a proven migration inventory. The documented rollback, freeze, and withdrawal-evidence procedures are in [docs/recovery-runbook.md](docs/recovery-runbook.md). Removing all upgraders is irreversible.
 
-Known testnet limits: only the deployment and safe readbacks are proven live so far; end-to-end actor workflow rows remain marked unexecuted in the proof matrix. The app relies on external wallet/network availability; evidence availability and consensus can yield non-settling results; and testnet GEN is simulated only.
+Known testnet limits: deployment, grant creation, full funding, two beneficiary evidence submissions, safe `UNRESOLVED` handling, and replay rejection are proven live in the proof matrix. A provisional decision, challenge, terminal payout/refund, withdrawal, and upgrade have not yet been executed live. The app relies on external wallet/network availability; evidence availability and consensus can yield non-settling results; and testnet GEN is simulated only.
 
 ## Observed local release gate — 2026-08-12
 
