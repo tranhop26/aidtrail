@@ -1,3 +1,1 @@
-export default function Home() {
-  return <main>AidTrail contract foundation</main>;
-}
+export { default } from "../src/app/page";
