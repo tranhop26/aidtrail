@@ -40,3 +40,7 @@ Fresh evidence: focused upgrade 12/12 passed; full direct 107/107 passed; opt-in
 - Deployment now explicitly waits for `FINALIZED`, requires `FINISHED_WITH_RETURN`, and extracts a valid address only from decoded deploy transaction data before emitting deployment facts. Focused receipt-validation tests cover success, merely accepted, execution failure, and missing-address cases.
 
 Fresh focused evidence: deploy receipt validation 4/4 passed; fee accounting 2/2 passed; live workflow safely skipped 1/1 without authorization; typecheck, lint, deployment dry-run, and diff check passed. No external call or deployment occurred.
+
+## Final consensus-to-EVM receipt correction
+
+The fee proof now uses the official `NewTransaction(bytes32,address,address)` event topic and indexed layout (`txId`, wildcard recipient, expected activator). It requires one unique matching log, obtains that log's EVM transaction hash, and independently verifies the EVM transaction `from` address equals the expected payer before using `gasUsed` and `effectiveGasPrice` from its receipt. Focused helper checks pass 4/4, including the literal official signature topic and payer-mismatch rejection; the live workflow remains safely skipped 1/1, typecheck and diff check pass, and no external call occurred.

@@ -20,7 +20,11 @@ from gltest.clients import get_gl_client
 from gltest.types import TransactionStatus
 from gltest.utils import extract_contract_address
 
-from accounting_proof import fee_adjusted_received_delta
+from accounting_proof import (
+    fee_adjusted_received_delta,
+    new_transaction_topics,
+    require_expected_payer,
+)
 
 
 pytestmark = pytest.mark.skipif(
@@ -56,27 +60,25 @@ def submission_fee_fields(client, consensus_receipt: dict, payer: str) -> tuple[
     transaction_hash = consensus_receipt.get("tx_id") or consensus_receipt.get("hash")
     if not transaction_hash:
         pytest.fail("finalized withdrawal receipt omitted its transaction hash")
+    transaction = client.get_transaction(transaction_hash=transaction_hash)
+    activation_block = int(transaction["read_state_block_range"]["activation_block"])
+    logs = client.get_logs(
+        {
+            "fromBlock": max(0, activation_block - 1000),
+            "toBlock": min(client.block_number, activation_block + 10),
+            "address": client.chain.consensus_main_contract["address"],
+            "topics": new_transaction_topics(transaction_hash, payer),
+        }
+    )
+    if len(logs) != 1:
+        pytest.fail("could not bind the consensus withdrawal to one payer NewTransaction log")
+    evm_hash = logs[0]["transactionHash"]
+    evm_transaction = dict(client.w3.eth.get_transaction(evm_hash))
     try:
-        evm_receipt = client.get_transaction_receipt(transaction_hash)
-    except Exception:
-        transaction = client.get_transaction(transaction_hash=transaction_hash)
-        activation_block = int(transaction["read_state_block_range"]["activation_block"])
-        sender_topic = "0x" + ("0" * 24) + payer.removeprefix("0x").lower()
-        logs = client.get_logs(
-            {
-                "fromBlock": max(0, activation_block - 1000),
-                "toBlock": min(client.block_number, activation_block + 10),
-                "address": client.chain.consensus_main_contract["address"],
-                "topics": [
-                    client.w3.keccak(text="NewTransaction(bytes32,address)").hex(),
-                    transaction_hash,
-                    sender_topic,
-                ],
-            }
-        )
-        if len(logs) != 1:
-            pytest.fail("could not bind the consensus withdrawal to one payer EVM receipt")
-        evm_receipt = client.get_transaction_receipt(logs[0]["transactionHash"])
+        require_expected_payer(evm_transaction, payer)
+    except ValueError as exc:
+        pytest.fail(str(exc))
+    evm_receipt = client.w3.eth.get_transaction_receipt(evm_hash)
     gas_used = evm_receipt.get("gasUsed")
     effective_gas_price = evm_receipt.get("effectiveGasPrice")
     if gas_used is None or effective_gas_price is None:
