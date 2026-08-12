@@ -15,6 +15,16 @@ def test_create_grant_stores_locked_plan(contract, vm, sponsor, beneficiary, val
     assert grant["escrow_target"] == sum(valid_plan.allocations)
 
 
+def test_create_grant_accepts_studionet_hex_address(contract, vm, sponsor, beneficiary, valid_plan):
+    plan = list(valid_plan)
+    plan[0] = beneficiary.as_hex
+    with vm.sender(sponsor):
+        grant_id = contract.create_grant(*plan).call()
+
+    assert grant_id == "ATG-1"
+    assert contract.get_grant(grant_id).call()["beneficiary"] == beneficiary.as_hex
+
+
 @pytest.mark.parametrize(
     ("plan_change", "message"),
     [

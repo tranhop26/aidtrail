@@ -211,6 +211,10 @@ class AidTrail(gl.Contract):
         challenge_window: u256,
         schema_version: u256,
     ) -> str:
+        # Studionet calldata currently delivers annotated addresses as hex strings,
+        # while direct tests may supply Address instances.
+        if isinstance(beneficiary, str):
+            beneficiary = Address(beneficiary)
         self._validate_plan(
             beneficiary,
             project_name,
