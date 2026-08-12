@@ -9,6 +9,7 @@ coverage/
 .env.*
 !.env.example
 *.log
+*.tsbuildinfo
 __pycache__/
 .pytest_cache/
 .venv/

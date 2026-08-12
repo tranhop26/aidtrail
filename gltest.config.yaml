@@ -1,0 +1,9 @@
+paths:
+  contracts: contracts
+  artifacts: artifacts
+networks:
+  default: localnet
+  localnet:
+    id: 61127
+    url: http://127.0.0.1:4000
+    chain_type: localnet
