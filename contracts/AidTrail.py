@@ -123,6 +123,8 @@ class AidTrail(gl.Contract):
             evidence_requirements,
             min_independent_sources,
             evidence_policy_version,
+            challenge_bond,
+            challenge_window,
             schema_version,
         )
         grant_number = self.next_grant_number + 1
@@ -245,6 +247,8 @@ class AidTrail(gl.Contract):
         evidence_requirements: list[str],
         min_independent_sources: list[u256],
         evidence_policy_version: str,
+        challenge_bond: u256,
+        challenge_window: u256,
         schema_version: u256,
     ) -> None:
         if schema_version != SCHEMA_VERSION:
@@ -255,6 +259,10 @@ class AidTrail(gl.Contract):
             raise ValueError("sponsor and beneficiary must differ")
         if evidence_policy_version != "v1":
             raise ValueError("unsupported evidence policy")
+        if challenge_bond == 0:
+            raise ValueError("challenge bond must be positive")
+        if challenge_window == 0:
+            raise ValueError("challenge window must be positive")
         self._validate_bounded_text(project_name, MAX_IDENTITY_TEXT, "project name")
         self._validate_bounded_text(organization, MAX_IDENTITY_TEXT, "organization")
         self._validate_bounded_text(project_reference, MAX_IDENTITY_TEXT, "project reference")

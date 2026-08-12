@@ -23,6 +23,8 @@ def test_create_grant_stores_locked_plan(contract, vm, sponsor, beneficiary, val
         ({"milestone_titles": ["1", "2", "3", "4", "5", "6"]}, "grant must contain one to five milestones"),
         ({"escrow_target": 601}, "milestone allocations must equal escrow target"),
         ({"allocations": [100, 0, 500]}, "milestone allocation must be positive"),
+        ({"challenge_bond": 0}, "challenge bond must be positive"),
+        ({"challenge_window": 0}, "challenge window must be positive"),
         ({"deadlines": [1, 2_000_100_000, 2_000_200_000]}, "milestone deadline must be in the future"),
         ({"deadlines": [2_000_000_000, 2_000_000_000, 2_000_200_000]}, "milestone deadlines must be ordered"),
         ({"project_name": repeat("x", 129)}, "project name is empty or too long"),
