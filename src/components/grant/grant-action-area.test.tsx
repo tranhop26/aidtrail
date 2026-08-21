@@ -8,10 +8,10 @@ import { TransactionProvider } from "../providers/transaction-provider";
 import { WalletProvider } from "../providers/wallet-provider";
 import { GrantActionArea } from "./grant-action-area";
 
-const contractState = vi.hoisted(() => ({ credit: 0n, reads: [] as Array<{ functionName: string; args?: unknown[] }>, writes: [] as Array<{ functionName: string; value: bigint }> }));
+const contractState = vi.hoisted(() => ({ credit: 0n, reads: [] as Array<{ functionName: string; args?: unknown[] }>, writes: [] as Array<{ functionName: string; value: bigint }>, readPlan: [] as Array<string | Promise<string>> }));
 vi.mock("../../lib/genlayer/read-client", () => ({
   createReadClient: () => ({
-    readContract: async (input: { functionName: string; args?: unknown[] }) => { contractState.reads.push(input); return contractState.credit.toString(); },
+    readContract: async (input: { functionName: string; args?: unknown[] }) => { contractState.reads.push(input); return await (contractState.readPlan.shift() ?? contractState.credit.toString()); },
     getTransaction: async () => undefined,
   }),
 }));
@@ -49,13 +49,19 @@ describe("GrantActionArea connected-wallet credit workflow", () => {
     contractState.credit = 0n;
     contractState.reads = [];
     contractState.writes = [];
+    contractState.readPlan = [];
   });
 
   it("loads deposited contract credit and enables challenge and withdrawal", async () => {
     process.env.NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS = "0x68848ba962a2ff80f1cec4529a4c79d5d35f2c3c";
+    let accountsChanged: ((accounts: unknown) => void) | undefined;
     Object.defineProperty(window, "ethereum", {
       configurable: true,
-      value: { request: async ({ method }: { method: string }) => method === "eth_accounts" ? [account] : "0xf22f" },
+      value: {
+        request: async ({ method }: { method: string }) => method === "eth_accounts" ? [account] : "0xf22f",
+        on: (event: string, callback: (accounts: unknown) => void) => { if (event === "accountsChanged") accountsChanged = callback; },
+        removeListener: () => undefined,
+      },
     });
     const container = document.createElement("div");
     const root = createRoot(container);
@@ -84,10 +90,16 @@ describe("GrantActionArea connected-wallet credit workflow", () => {
     expect(buttons.find((button) => button.textContent === "Challenge decision")?.disabled).toBe(false);
     expect(buttons.find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(false);
     expect(contractState.reads.some((read) => read.functionName === "get_credit" && read.args?.[0] === account)).toBe(true);
+    let resolveOlderRead: ((value: string) => void) | undefined;
+    const olderRead = new Promise<string>((resolve) => { resolveOlderRead = resolve; });
+    contractState.readPlan = [olderRead, "5", "0", "0"];
+    await act(async () => { accountsChanged?.([]); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { accountsChanged?.([account]); await new Promise((resolve) => setTimeout(resolve, 0)); });
     await act(async () => {
-      buttons.find((button) => button.textContent === "Withdraw refundable credit")?.click();
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    await act(async () => { resolveOlderRead?.("5"); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(contractState.credit).toBe(0n);
     expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(true);
     await act(async () => root.unmount());
