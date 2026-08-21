@@ -11,12 +11,14 @@ import type { Grant, Milestone } from "../../lib/domain";
 import { TransactionProvider } from "../providers/transaction-provider";
 import { WalletProvider } from "../providers/wallet-provider";
 
+const writeContract = vi.hoisted(() => vi.fn(async (input: { functionName: string; args?: unknown[]; value: bigint }) => { void input; return `0x${"a".repeat(64)}` as `0x${string}`; }));
 vi.mock("../../lib/genlayer/read-client", () => ({
   createReadClient: () => ({
     readContract: async () => ({ network: "studionet", contract_replay_marker: "aidtrail:contract" }),
     getTransaction: async () => undefined,
   }),
 }));
+vi.mock("../../lib/genlayer/write-client", () => ({ createWriteClient: async () => ({ connect: async () => undefined, writeContract }) }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,6 +26,7 @@ describe("AidTrail workflow forms", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "ethereum");
     delete process.env.NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS;
+    writeContract.mockClear();
   });
 
   it("blocks a plan whose allocations do not equal escrow target", () => {
@@ -58,7 +61,7 @@ describe("AidTrail workflow forms", () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(<WalletProvider expectedChainId="61999"><TransactionProvider><EvidenceForm grant={grant} milestone={milestone} /></TransactionProvider></WalletProvider>);
+      root.render(<WalletProvider expectedChainId="61999"><TransactionProvider readReceipt={async () => ({ status: "FINALIZED", execution: "FINISHED_WITH_ERROR" })}><EvidenceForm grant={grant} milestone={milestone} /></TransactionProvider></WalletProvider>);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
@@ -83,6 +86,21 @@ describe("AidTrail workflow forms", () => {
 
     expect(container.querySelector("button")?.disabled).toBe(false);
     expect(JSON.parse(container.querySelector("pre")?.textContent ?? "{}").independent_sources).toHaveLength(2);
+    await act(async () => { fill('[data-source-index="1"][data-source-field="url"]', "https://auditor-one.example/duplicate"); });
+    expect(container.querySelector("button")?.disabled).toBe(true);
+    await act(async () => { fill('[data-source-index="1"][data-source-field="url"]', "https://auditor-two.example/report"); fill('[data-source-index="1"][data-source-field="issuer"]', "Auditor One"); });
+    expect(container.querySelector("button")?.disabled).toBe(true);
+    await act(async () => { fill('[data-source-index="1"][data-source-field="issuer"]', "Auditor Two"); fill('[data-source-index="1"][data-source-field="url"]', "https://localhost/report"); });
+    expect(container.querySelector("button")?.disabled).toBe(true);
+    await act(async () => { fill('[data-source-index="1"][data-source-field="url"]', "https://auditor-two.example/report"); container.querySelector<HTMLButtonElement>("button")?.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(writeContract).toHaveBeenCalledOnce();
+    const submitted = writeContract.mock.calls[0][0];
+    expect(submitted.functionName).toBe("submit_evidence");
+    const evidenceJson = submitted.args?.[2];
+    expect(typeof evidenceJson).toBe("string");
+    if (typeof evidenceJson !== "string") throw new Error("missing evidence JSON");
+    expect(JSON.parse(evidenceJson).independent_sources).toHaveLength(2);
     await act(async () => root.unmount());
   });
 });

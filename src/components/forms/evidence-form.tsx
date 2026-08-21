@@ -16,6 +16,16 @@ const unix = () => Math.floor(Date.now() / 1000);
 const artifact = (issuer: string, url: string, contentHash: string, subject: object) => ({ schema_version: 1, issuer, url, content_hash: contentHash, content_version: "v1", subject, dates: { observation_start: unix() - 86400, observation_end: unix() - 3600, published_at: unix() - 60 } });
 const blankSource = (): SourceDraft => ({ url: "", issuer: "", hash: "" });
 const validHash = (value: string) => /^0x[0-9a-fA-F]{64}$/.test(value);
+const numericAuthorityLabel = (label: string) => /^\d+$/.test(label) || /^0x[0-9a-f]+$/.test(label);
+function evidenceHost(url: string): string | undefined {
+  if (!url.startsWith("https://") || url.length > 512) return undefined;
+  const authority = url.slice(8).split(/[/?#]/, 1)[0].toLowerCase();
+  if (!authority || authority.includes("@") || authority.includes(":")) return undefined;
+  if (authority === "localhost" || authority.endsWith(".localhost")) return undefined;
+  const labels = authority.split(".");
+  if (labels.length < 2 || labels.every(numericAuthorityLabel)) return undefined;
+  return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)) ? authority : undefined;
+}
 
 export function EvidenceForm({ grant, milestone }: { grant: Grant; milestone: Milestone }) {
   const wallet = useWallet();
@@ -47,12 +57,19 @@ export function EvidenceForm({ grant, milestone }: { grant: Grant; milestone: Mi
       independent_sources: sources.map((source) => artifact(source.issuer.trim(), source.url, source.hash, subject)),
     };
   }, [domain, grant, milestone, reportHash, reportUrl, sources]);
+  const reportHost = evidenceHost(reportUrl);
+  const sourceHosts = sources.map((source) => evidenceHost(source.url));
+  const sourceIssuers = sources.map((source) => source.issuer.trim());
   const ready = Boolean(domain)
     && (sourceCount === 1 || sourceCount === 2)
-    && /^https:\/\//.test(reportUrl)
+    && Boolean(reportHost)
     && validHash(reportHash)
     && sources.length === sourceCount
-    && sources.every((source) => /^https:\/\//.test(source.url) && source.issuer.trim().length > 0 && validHash(source.hash));
+    && sourceHosts.every(Boolean)
+    && new Set([reportHost, ...sourceHosts]).size === sourceCount + 1
+    && sourceIssuers.every((issuer) => issuer.length > 0 && issuer.length <= 128 && issuer !== grant.beneficiary)
+    && new Set(sourceIssuers).size === sourceCount
+    && sources.every((source) => validHash(source.hash));
   const submit = async () => {
     if (!ready || wallet.status !== "connected" || !wallet.account || !wallet.provider) return;
     const client = await createWriteClient(wallet.provider, wallet.account);

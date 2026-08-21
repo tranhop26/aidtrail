@@ -3,14 +3,27 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Grant, Milestone } from "../../lib/domain";
+import { CreditForm } from "../forms/credit-form";
 import { TransactionProvider } from "../providers/transaction-provider";
 import { WalletProvider } from "../providers/wallet-provider";
 import { GrantActionArea } from "./grant-action-area";
 
+const contractState = vi.hoisted(() => ({ credit: 0n, reads: [] as Array<{ functionName: string; args?: unknown[] }>, writes: [] as Array<{ functionName: string; value: bigint }> }));
 vi.mock("../../lib/genlayer/read-client", () => ({
   createReadClient: () => ({
-    readContract: async () => "5",
+    readContract: async (input: { functionName: string; args?: unknown[] }) => { contractState.reads.push(input); return contractState.credit.toString(); },
     getTransaction: async () => undefined,
+  }),
+}));
+vi.mock("../../lib/genlayer/write-client", () => ({
+  createWriteClient: async () => ({
+    connect: async () => undefined,
+    writeContract: async ({ functionName, value }: { functionName: string; value: bigint }) => {
+      contractState.writes.push({ functionName, value });
+      if (functionName === "deposit_challenge_credit") contractState.credit += value;
+      if (functionName === "withdraw_credit") contractState.credit = 0n;
+      return `0x${"a".repeat(64)}` as `0x${string}`;
+    },
   }),
 }));
 
@@ -33,6 +46,9 @@ describe("GrantActionArea connected-wallet credit workflow", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "ethereum");
     delete process.env.NEXT_PUBLIC_AIDTRAIL_CONTRACT_ADDRESS;
+    contractState.credit = 0n;
+    contractState.reads = [];
+    contractState.writes = [];
   });
 
   it("loads deposited contract credit and enables challenge and withdrawal", async () => {
@@ -44,14 +60,36 @@ describe("GrantActionArea connected-wallet credit workflow", () => {
     const container = document.createElement("div");
     const root = createRoot(container);
 
+    const receipt = async () => ({ status: "FINALIZED" as const, execution: "FINISHED_WITH_RETURN" as const });
     await act(async () => {
-      root.render(<WalletProvider expectedChainId="61999"><TransactionProvider><GrantActionArea grant={grant} milestone={milestone} milestones={[milestone]} /></TransactionProvider></WalletProvider>);
+      root.render(<WalletProvider expectedChainId="61999"><TransactionProvider readReceipt={receipt}><CreditForm credit={0n} /></TransactionProvider></WalletProvider>);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const amount = container.querySelector<HTMLInputElement>('input[type="number"]');
+    if (!amount) throw new Error("missing deposit amount input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(amount, "5");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Deposit credit")?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(contractState.writes).toContainEqual({ functionName: "deposit_challenge_credit", value: 5n });
+
+    await act(async () => {
+      root.render(<WalletProvider expectedChainId="61999"><TransactionProvider readReceipt={receipt}><GrantActionArea grant={grant} milestone={milestone} milestones={[milestone]} /></TransactionProvider></WalletProvider>);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     const buttons = Array.from(container.querySelectorAll("button"));
     expect(buttons.find((button) => button.textContent === "Challenge decision")?.disabled).toBe(false);
     expect(buttons.find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(false);
+    expect(contractState.reads.some((read) => read.functionName === "get_credit" && read.args?.[0] === account)).toBe(true);
+    await act(async () => {
+      buttons.find((button) => button.textContent === "Withdraw refundable credit")?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(contractState.credit).toBe(0n);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(true);
     await act(async () => root.unmount());
   });
 });
