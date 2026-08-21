@@ -43,7 +43,7 @@ export function RoleActions({ grant, milestone, milestones = [milestone], wallet
     <p>Actions are submitted by your wallet and only complete after finalized execution and contract readback.</p>
     <div className="role-actions__grid">
       {sponsor && <ActionButton label="Fund grant" reason={grant.status === "FUNDING" ? needsWallet : "Funding is only available while the grant is in FUNDING state."} onClick={call("fund")} />}
-      {sponsor && <ActionButton label="Withdraw refundable credit" reason={grant.status === "EXPIRED" || grant.status === "COMPLETED" ? needsWallet : "Refundable credit is available only after the grant is completed or expired."} onClick={call("withdraw_credit")} />}
+      {connected && <ActionButton label="Withdraw refundable credit" reason={challengeCredit > 0n ? undefined : "This wallet has no refundable contract credit."} onClick={call("withdraw_credit")} />}
       {beneficiary && milestone.status === "PENDING" && <ActionButton label="Submit evidence" reason={needsWallet} onClick={call("submit_evidence")} />}
       {beneficiary && milestone.status === "REQUEST_MORE_INFO" && <ActionButton label="Submit cure evidence" reason={needsWallet} onClick={call("submit_cure")} />}
       {connected && (milestone.status === "PROVISIONAL_APPROVAL" || milestone.status === "PROVISIONAL_REJECTION") && <ActionButton label="Challenge decision" reason={!challengeOpen ? "The challenge window has closed." : challengeCredit >= grant.challengeBond ? undefined : `A challenge credit of ${grant.challengeBond.toString()} GEN is required.`} onClick={call("challenge")} />}

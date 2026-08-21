@@ -36,6 +36,19 @@ describe("RoleActions", () => {
     expect(markup).not.toContain("Submit evidence");
   });
 
+  it("enables challenge when connected-wallet contract credit covers the bond", () => {
+    const markup = renderToStaticMarkup(<RoleActions grant={grant} milestone={milestone("PROVISIONAL_APPROVAL", 200n)} wallet={{ status: "connected", account: stranger }} challengeCredit={5n} now={100} />);
+
+    expect(markup).not.toMatch(/<button[^>]*disabled[^>]*>Challenge decision/);
+  });
+
+  it("enables withdrawal for any connected wallet with refundable contract credit", () => {
+    const markup = renderToStaticMarkup(<RoleActions grant={grant} milestone={milestone("PENDING")} wallet={{ status: "connected", account: stranger }} challengeCredit={5n} now={100} />);
+
+    expect(markup).toContain("Withdraw refundable credit");
+    expect(markup).not.toMatch(/<button[^>]*disabled[^>]*>Withdraw refundable credit/);
+  });
+
   it.each(["PENDING", "REQUEST_MORE_INFO", "UNRESOLVED"] as const)("opens expiry for %s only after the 86,400 second cure period", (status) => {
     const due = { ...milestone(status), deadline: 100n };
     const beforeCure = renderToStaticMarkup(<RoleActions grant={grant} milestone={due} wallet={{ status: "connected", account: stranger }} now={86_500} />);
