@@ -115,6 +115,17 @@ describe("GrantActionArea connected-wallet credit workflow", () => {
     await act(async () => { resolveStalePreflight?.("5"); await new Promise((resolve) => setTimeout(resolve, 0)); });
     expect(contractState.writes.filter((write) => write.functionName === "withdraw_credit")).toHaveLength(1);
     expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(true);
+    await act(async () => { accountsChanged?.([]); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { accountsChanged?.([account]); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    let resolveSupersededPreflight: ((value: string) => void) | undefined;
+    const supersededPreflight = new Promise<string>((resolve) => { resolveSupersededPreflight = resolve; });
+    contractState.readPlan = [supersededPreflight, "0"];
+    await act(async () => { Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { accountsChanged?.([]); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { accountsChanged?.([account]); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(async () => { resolveSupersededPreflight?.("5"); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(contractState.writes.filter((write) => write.functionName === "withdraw_credit")).toHaveLength(1);
+    expect(Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Withdraw refundable credit")?.disabled).toBe(true);
     await act(async () => root.unmount());
   });
 });
